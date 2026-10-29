@@ -1,0 +1,43 @@
+name: Build APK (مرة واحدة)
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Point the app at the live web page
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')
+          export APP_URL="https://$OWNER.github.io/$REPO_NAME/"
+          echo "App URL: $APP_URL"
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));c.server={url:process.env.APP_URL,cleartext:false};fs.writeFileSync('capacitor.config.json',JSON.stringify(c,null,2));"
+      - run: npx cap sync android
+      - name: Decode signing key
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          test -n "$KS" || { echo "Missing secret ANDROID_KEYSTORE_B64"; exit 1; }
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/mahfazty.keystore"
+      - run: chmod +x android/gradlew
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          KEYSTORE_PATH: ${{ runner.temp }}/mahfazty.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mahfazty-apk
+          path: android/app/build/outputs/apk/release/app-release.apk

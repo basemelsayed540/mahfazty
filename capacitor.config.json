@@ -1,0 +1,9 @@
+{
+  "appId": "com.mahfazty.app",
+  "appName": "محفظتي",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_icon_config_sample", "iconColor": "#B84A0B" }
+  }
+}

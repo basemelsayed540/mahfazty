@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">محفظتي</string>
+    <string name="title_activity_main">محفظتي</string>
+    <string name="package_name">com.mahfazty.app</string>
+    <string name="custom_url_scheme">com.mahfazty.app</string>
+</resources>

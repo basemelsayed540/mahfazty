@@ -1,0 +1,521 @@
+/* محفظتي - واجهة التطبيق */
+(function () {
+  'use strict';
+  const A = window.Assistant;
+  const KEY = 'mahfazty_v1';
+  const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const ACC = { cash: 'نقدي', wallet: 'محفظة', insta: 'انستا باي' };
+  const ACC_IDS = ['cash', 'wallet', 'insta'];
+  const DAY = 864e5;
+
+  /* ---------- التخزين ---------- */
+  function defaults() {
+    return { v: 1, opening: { cash: 0, wallet: 0, insta: 0 }, txs: [], learned: {}, budgets: {},
+      settings: { remind: true, remindMode: 'interval', everyH: 2, startT: '09:00', endT: '22:00', times: ['09:00', '13:00', '18:00', '21:00'], remindText: 'صرفت حاجة في آخر ساعتين؟ سجّلها دلوقتي', lastAcc: 'cash', onboarded: false, lastReminder: 0, lastBanner: 0, aiOn: false, aiKey: '', aiModel: 'claude-haiku-5-5' } };
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { const d = JSON.parse(raw); const b = defaults(); return Object.assign(b, d, { settings: Object.assign(b.settings, d.settings || {}) }); }
+    } catch (e) { /* التخزين غير متاح */ }
+    return defaults();
+  }
+  let S = load();
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
+  const engine = A.create(S.learned);
+
+  const APP_VERSION = '1.1.0';
+  const ui = { tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
+
+  /* ---------- أدوات ---------- */
+  const $ = (s, r) => (r || document).querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (n) => (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const catOf = (id) => A.CAT_BY_ID[id] || A.CAT_BY_ID.other;
+  const chip = (id) => { const c = catOf(id); return `<span class="catchip" style="background:${c.color}">${esc(c.name)}</span>`; };
+  function timeStr(ts) { const d = new Date(ts); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'م' : 'ص'; h = h % 12 || 12; return `${h}:${m} ${ap}`; }
+  const startOfDay = (ts) => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  function dayLabel(ts) {
+    const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY);
+    if (diff === 0) return 'النهارده'; if (diff === 1) return 'امبارح'; const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  }
+  function toast(msg, ms) { ui.toast = msg; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { ui.toast = ''; render(); }, ms || 3200); }
+
+  function balances() {
+    const b = Object.assign({}, S.opening);
+    S.txs.forEach((t) => {
+      if (t.type === 'in') b[t.acc] += t.amount; else if (t.type === 'out') b[t.acc] -= t.amount;
+      else if (t.type === 'xfer') { b[t.acc] -= t.amount; b[t.to] += t.amount; }
+    });
+    return b;
+  }
+  const inMonth = (y, m) => S.txs.filter((t) => { const d = new Date(t.ts); return d.getFullYear() === y && d.getMonth() === m; });
+  const sumBy = (arr, type) => arr.filter((t) => t.type === type).reduce((a, t) => a + t.amount, 0);
+  function byCat(arr) { const o = {}; arr.filter((t) => t.type === 'out').forEach((t) => { o[t.cat] = (o[t.cat] || 0) + t.amount; }); return o; }
+
+  /* ---------- شاشات ---------- */
+  function bannerHtml() {
+    if (!ui.banner) return '';
+    return `<div class="notif" role="alert"><div class="row"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-3v3"/><circle cx="16.5" cy="13.5" r="1"/></svg></div>
+      <div class="grow"><div class="small">محفظتي · الآن</div><div class="h" style="font-size:15px">صرفت حاجة في آخر ساعتين؟</div></div></div>
+      <div class="row"><button class="btn primary grow" data-act="banner-open">فتح وتسجيل</button><button class="btn ghost grow" data-act="banner-skip">تخطي</button></div></div>`;
+  }
+
+  function homeHtml() {
+    const b = balances(); const total = b.cash + b.wallet + b.insta;
+    const today = S.txs.filter((t) => t.ts >= startOfDay(Date.now()) && t.type !== 'xfer');
+    const tin = sumBy(today, 'in'); const tout = sumBy(today, 'out');
+    const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
+    return `<div class="screen">${bannerHtml()}
+      <div class="total"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
+      <div class="stack">
+        <button class="acard cash" data-act="acc" data-id="cash" aria-label="نقدي ${fmt(b.cash)}"><span>نقدي</span><b>${fmt(b.cash)}</b></button>
+        <button class="acard wallet" data-act="acc" data-id="wallet" aria-label="محفظة ${fmt(b.wallet)}"><span>محفظة</span><b>${fmt(b.wallet)}</b></button>
+        <button class="acard insta" data-act="acc" data-id="insta" aria-label="انستا باي ${fmt(b.insta)}"><span>انستا باي</span><b>${fmt(b.insta)}</b></button>
+      </div>
+      <div class="composer">
+        <label class="small" for="inp">اكتب بكلامك وأنا أفهم وأصنّف</label>
+        <textarea id="inp" rows="2" placeholder="مثال: 50 بنزين و10 زيت">${esc(ui.text)}</textarea>
+        <div class="row between">
+          <div class="chips">
+            <button class="chip" data-act="ex" data-t="50 فطار و300 لحمة">50 فطار و300 لحمة</button>
+            <button class="chip" data-act="ex" data-t="50 بنزين و10 زيت">50 بنزين و10 زيت</button>
+            <button class="chip" data-act="ex" data-t="راتب 8000 انستا">راتب 8000 انستا</button>
+          </div>
+          <button class="btn primary" data-act="parse" style="flex-shrink:0">سجّل</button>
+        </div>
+      </div>
+      ${draftHtml()}
+      <div class="card row between"><div><div class="h">النهارده</div><div class="small">دخل ${fmt(tin)} · خرج ${fmt(tout)}</div></div><div class="${tin - tout >= 0 ? 'pos' : 'neg'}" style="font-size:20px">${tin - tout >= 0 ? '+' : '-'}${fmt(Math.abs(tin - tout))}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
+        ${recent.length ? recent.map(txRow).join('') : '<div class="card small">لسه مفيش عمليات. اكتب أول مصروف فوق.</div>'}
+      </div></div>`;
+  }
+
+  function txRow(t) {
+    if (t.type === 'xfer') return `<button class="tx" data-act="tx" data-id="${t.id}"><div><div class="t1">تحويل</div><div class="t2">${ACC[t.acc]} ← ${ACC[t.to]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</div></div><div style="font-weight:800">${fmt(t.amount)}</div></button>`;
+    return `<button class="tx" data-act="tx" data-id="${t.id}"><div><div class="t1">${esc(t.label || catOf(t.cat).name)}</div><div class="t2">${chip(t.cat)}<span>${ACC[t.acc]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</span></div></div><div class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '-'}${fmt(t.amount)}</div></button>`;
+  }
+
+  function catOptions(type, sel) {
+    const list = type === 'in' ? A.CATS_IN : A.CATS_OUT;
+    return list.map((c) => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  }
+  function accOptions(sel) { return ACC_IDS.map((a) => `<option value="${a}"${a === sel ? ' selected' : ''}>${ACC[a]}</option>`).join(''); }
+
+  function draftHtml() {
+    const d = ui.draft; if (!d) return '';
+    if (d.kind === 'transfer') {
+      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} ج.م من ${ACC[d.from]} إلى ${ACC[d.to]}</div>
+        <div class="row"><button class="btn primary grow" data-act="save-draft">تأكيد التحويل</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
+    }
+    const aiNote = d.ai === 'pending' ? '<div class="ok">بسأل Claude عشان أتأكد…</div>' : d.ai === 'done' ? '<div class="ok">Claude ساعدني في الفهم</div>' : d.ai === 'error' ? '<div class="warn">ما قدرتش أوصل لـClaude، اتصنّف محلياً.</div>' : '';
+    const items = d.items.map((it, i) => {
+      const unsure = it.conf === 'low';
+      const msg = unsure ? `<div class="warn">مش متأكد من التصنيف. اختار الصح وهتعلّم منه.</div>`
+        : (it.usedContext ? `<div class="ok">فهمتها من سياق كلامك</div>` : '');
+      return `<div class="ditem" data-i="${i}">
+        <div class="row"><input data-f="amount" inputmode="decimal" aria-label="المبلغ" value="${esc(it.amount)}" style="max-width:110px"><input data-f="label" aria-label="الوصف" value="${esc(it.label)}" placeholder="الوصف"><button class="xbtn" data-act="del-item" data-i="${i}" aria-label="حذف البند">✕</button></div>
+        <div class="row"><select data-f="cat" aria-label="التصنيف">${catOptions(it.type, it.cat)}</select><select data-f="acc" aria-label="الحساب">${accOptions(it.acc)}</select></div>
+        <div class="seg" role="group" aria-label="النوع"><button class="${it.type === 'out' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="out">مصروف</button><button class="${it.type === 'in' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="in">دخل</button></div>
+        ${msg}</div>`;
+    }).join('');
+    return `<div class="card draft"><div class="h">راجع قبل الحفظ</div>${aiNote}${items}
+      <div class="row"><button class="btn primary grow" data-act="save-draft">حفظ ${d.items.length > 1 ? 'الكل' : ''}</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
+  }
+
+  function monthHtml() {
+    const { y, m } = ui.vm; const arr = inMonth(y, m);
+    const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out'); const net = inc - out;
+    const first = new Date(y, m, 1); const dim = new Date(y, m + 1, 0).getDate(); const offset = (first.getDay() + 1) % 7;
+    const per = {}; arr.filter((t) => t.type === 'out').forEach((t) => { const d = new Date(t.ts).getDate(); per[d] = (per[d] || 0) + t.amount; });
+    const max = Math.max(1, ...Object.keys(per).map((k) => per[k]));
+    const now = new Date(); const isCur = now.getFullYear() === y && now.getMonth() === m;
+    let cells = ''; for (let i = 0; i < offset; i++) cells += '<div class="day z"></div>';
+    for (let d = 1; d <= dim; d++) {
+      const v = per[d] || 0; const fut = isCur && d > now.getDate();
+      const cls = fut ? 'fut' : v === 0 ? '' : v / max > 0.66 ? 'l3' : v / max > 0.33 ? 'l2' : 'l1';
+      cells += `<button class="day ${cls}" data-act="day" data-d="${d}" aria-label="${d} ${MONTHS[m]} مصروف ${fmt(v)}">${d}</button>`;
+    }
+    const cats = byCat(arr); const keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
+    const bars = keys.length ? keys.map((k) => {
+      const bud = S.budgets[k]; const pct = out ? cats[k] / out * 100 : 0; const over = bud && cats[k] > bud;
+      return `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}${bud ? ` <span class="small">(من ${fmt(bud)})</span>` : ''}</span><span class="${over ? 'neg' : ''}">${fmt(cats[k])}</span></div><div class="bar"><i style="width:${bud ? Math.min(100, cats[k] / bud * 100) : pct}%;background:${over ? 'var(--red)' : catOf(k).color}"></i></div></div>`;
+    }).join('') : '<div class="small">مفيش مصروفات في الشهر ده.</div>';
+    const accs = ACC_IDS.map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${ACC[a]}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
+    return `<div class="screen">
+      <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
+      <div class="tiles3"><div class="tile" style="background:var(--teal)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--red)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purple)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">خريطة الصرف اليومي</span><span class="small">الغامق = صرف أكتر</span></div>
+        <div class="dow"><span>سبت</span><span>أحد</span><span>اثنين</span><span>ثلاثاء</span><span>أربعاء</span><span>خميس</span><span>جمعة</span></div><div class="days">${cells}</div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
+  }
+
+  function yearHtml() {
+    const y = ui.vy; const now = new Date(); let inc = 0; let out = 0; const nets = [];
+    for (let m = 0; m < 12; m++) {
+      const arr = inMonth(y, m); const i = sumBy(arr, 'in'); const o = sumBy(arr, 'out'); inc += i; out += o;
+      nets.push({ m, has: arr.some((t) => t.type !== 'xfer'), net: i - o, o });
+    }
+    const act = nets.filter((n) => n.has); const best = act.length ? act.reduce((a, b) => (b.net > a.net ? b : a)) : null; const worst = act.length ? act.reduce((a, b) => (b.net < a.net ? b : a)) : null;
+    const maxO = act.length ? act.reduce((a, b) => (b.o > a.o ? b : a)) : null;
+    const tiles = nets.map((n) => `<button class="mt ${!n.has ? 'n' : (best && n.m === best.m && act.length > 1 ? 'g' : (worst && n.m === worst.m && act.length > 1 ? 'w' : ''))}" data-act="gomonth" data-m="${n.m}"><b>${MONTHS[n.m]}</b><span>${n.has ? (n.net >= 0 ? '+' : '-') + fmt(Math.abs(n.net)) : '-'}</span></button>`).join('');
+    const yarr = S.txs.filter((t) => new Date(t.ts).getFullYear() === y);
+    const accs = ACC_IDS.map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${ACC[a]}</span><b>${fmt(yarr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
+    const months = Math.max(1, y === now.getFullYear() ? now.getMonth() + 1 : (act.length || 1));
+    const saving = inc ? Math.round((inc - out) / inc * 100) : 0;
+    return `<div class="screen">
+      <div class="nav"><button data-act="yprev" aria-label="السنة السابقة">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">سنة ${y}</div><div class="small">حساب السنة</div></div><button data-act="ynext" aria-label="السنة التالية">‹</button></div>
+      <div style="background:var(--purple);color:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:13px;font-weight:600">توفير السنة</div><div style="font-size:36px;font-weight:800;line-height:1.15">${inc - out >= 0 ? '+' : '-'}${fmt(Math.abs(inc - out))} <span style="font-size:16px;font-weight:600">ج.م</span></div><div class="row between" style="font-size:13px;font-weight:700;padding-top:6px"><span>دخل ${fmt(inc)}</span><span>مصروف ${fmt(out)}</span></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="row between"><span class="h">صافي كل شهر</span><span class="small">أخضر = الأفضل · أحمر = الأقل</span></div><div class="mgrid">${tiles}</div></div>
+      <div class="tiles2"><div class="stat"><small>متوسط المصروف شهرياً</small><b>${fmt(out / months)}</b></div><div class="stat"><small>نسبة التوفير</small><b style="color:var(--teal)">${saving}%</b></div>
+        <div class="stat"><small>أكتر شهر صرفاً</small><b>${maxO ? MONTHS[maxO.m] : '-'}</b></div><div class="stat"><small>عدد العمليات</small><b>${yarr.filter((t) => t.type !== 'xfer').length}</b></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">الصرف حسب البطاقة (السنة)</div>${accs}</div></div>`;
+  }
+
+  /* ---------- المساعد: ملاحظات ذكية ---------- */
+  function insights() {
+    const out = []; const now = new Date(); const cur = inMonth(now.getFullYear(), now.getMonth());
+    const prev = inMonth(now.getFullYear(), now.getMonth() - 1 < 0 ? now.getFullYear() - 1 : now.getFullYear(), (now.getMonth() + 11) % 12);
+    const today = S.txs.filter((t) => t.ts >= startOfDay(Date.now()) && t.type !== 'xfer');
+    if (!S.txs.length) { out.push('ابدأ بتسجيل أول مصروف بكلامك العادي، وأنا هتعلّم أسلوبك مع الوقت.'); return out; }
+    if (!today.length) out.push('لسه ما سجلتش حاجة النهارده.');
+    const co = sumBy(cur, 'out'); const po = sumBy(prev.filter((t) => new Date(t.ts).getDate() <= now.getDate()), 'out');
+    if (po > 0 && co > 0) { const p = Math.round((co - po) / po * 100); out.push(p > 10 ? `مصروفك الشهر ده أعلى ${p}% من نفس الفترة في الشهر اللي فات.` : p < -10 ? `برافو. مصروفك أقل ${Math.abs(p)}% من نفس الفترة الشهر اللي فات.` : 'مصروفك ماشي قريب من الشهر اللي فات.'); }
+    const bc = byCat(cur); const top = Object.keys(bc).sort((a, b) => bc[b] - bc[a])[0];
+    if (top && co) out.push(`أكتر حاجة بتصرف عليها الشهر ده: ${catOf(top).name} (${Math.round(bc[top] / co * 100)}% من مصروفك).`);
+    Object.keys(S.budgets).forEach((k) => { const b = S.budgets[k]; if (b > 0 && bc[k]) { const r = bc[k] / b; if (r >= 1) out.push(`تجاوزت ميزانية ${catOf(k).name} (${fmt(bc[k])} من ${fmt(b)}).`); else if (r >= 0.8) out.push(`قربت تخلّص ميزانية ${catOf(k).name}: صرفت ${Math.round(r * 100)}%.`); } });
+    const day = now.getDate(); const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    if (co > 0 && day >= 5) out.push(`بمعدلك الحالي هتوصل لحوالي ${fmt(Math.round(co / day * dim))} ج.م مصروف آخر الشهر.`);
+    const others = S.txs.filter((t) => t.cat === 'other').length;
+    if (others >= 3) out.push(`عندي ${others} عمليات في "أخرى". افتحها وصنّفها وأنا هتعلّم منها.`);
+    const kn = Object.keys(S.learned).filter((k) => k[0] !== '#' && k.indexOf(' ') < 0).length;
+    if (kn) out.push(`اتعلمت ${kn} كلمة من تصحيحاتك لحد دلوقتي.`);
+    return out;
+  }
+
+  function assistantHtml() {
+    const ins = insights().map((t) => `<div class="insight"><i></i><div>${esc(t)}</div></div>`).join('');
+    const chat = ui.chat.slice(-6).map((c) => `<div class="bubble me">${esc(c.q)}</div><div class="bubble bot">${esc(c.a)}</div>`).join('');
+    const lk = Object.keys(S.learned).filter((k) => k[0] !== '#' && k.indexOf(' ') < 0).map((k) => {
+      const e = S.learned[k]; const best = Object.keys(e).sort((a, b) => e[b] - e[a])[0]; return { k, best, n: e[best] };
+    }).sort((a, b) => b.n - a.n).slice(0, 25);
+    const learned = lk.length ? lk.map((x) => `<div class="row between"><span><b>${esc(x.k)}</b> ← ${chip(x.best)}</span><button class="xbtn" data-act="forget" data-k="${esc(x.k)}" aria-label="نسيان ${esc(x.k)}">✕</button></div>`).join('') : '<div class="small">لسه مفيش. لما تصحّح تصنيف هسجله هنا.</div>';
+    return `<div class="screen">${bannerHtml()}
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المساعد بيقولك</div>${ins}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">اسأل المساعد</div>
+        ${chat}<div class="field"><input id="qinp" aria-label="سؤالك" placeholder="كام صرفت على الأكل الشهر ده؟" value="${esc(ui.q)}"><button class="btn primary" data-act="ask">اسأل</button></div>
+        <div class="chips"><button class="chip" data-act="exq" data-t="كام صرفت النهارده">كام صرفت النهارده</button><button class="chip" data-act="exq" data-t="اكتر حاجة صرفت عليها">أكتر حاجة صرفت عليها</button><button class="chip" data-act="exq" data-t="معايا كام">معايا كام</button></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">اللي اتعلمته منك</div>${learned}</div>
+    </div>`;
+  }
+
+  function settingsHtml() {
+    const st = S.settings; const times = reminderTimes();
+    const budgets = A.CATS_OUT.filter((c) => c.id !== 'other').map((c) => `<div class="field"><label style="min-width:110px;font-size:13px;font-weight:600" for="b_${c.id}">${esc(c.name)}</label><input id="b_${c.id}" data-bud="${c.id}" inputmode="numeric" placeholder="بدون حد" value="${S.budgets[c.id] || ''}"></div>`).join('');
+    const everyOpts = [1, 2, 3, 4, 6, 8].map((h) => `<option value="${h}"${h === st.everyH ? ' selected' : ''}>كل ${h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : h + ' ساعات'}</option>`).join('');
+    const custom = (st.times || []).slice().sort().map((t) => `<span class="chip" style="display:inline-flex;gap:6px;align-items:center;color:var(--ink)">${t}<button class="xbtn" style="min-width:24px;min-height:24px" data-act="del-time" data-t="${t}" aria-label="حذف ${t}">✕</button></span>`).join('');
+    return `<div class="screen">${bannerHtml()}
+      <div style="font-size:22px;font-weight:800;padding:8px 4px 0">الإعدادات</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px"><div class="h">التذكير</div>
+        <label class="row" style="font-size:14px;font-weight:600"><input type="checkbox" id="remind" ${st.remind ? 'checked' : ''} style="width:22px;height:22px"> تفعيل التذكير</label>
+        <div class="seg" role="group" aria-label="نوع التذكير"><button class="${st.remindMode === 'interval' ? 'on' : ''}" data-act="rmode" data-v="interval">كل فترة</button><button class="${st.remindMode === 'custom' ? 'on' : ''}" data-act="rmode" data-v="custom">ساعات محددة</button></div>
+        ${st.remindMode === 'interval' ? `
+          <div class="field"><label for="every" style="min-width:60px;font-size:13px;font-weight:600">التكرار</label><select id="every">${everyOpts}</select></div>
+          <div class="field"><label for="st" style="min-width:70px;font-size:13px;font-weight:600">من الساعة</label><input type="time" id="st" value="${st.startT}"></div>
+          <div class="field"><label for="et" style="min-width:70px;font-size:13px;font-weight:600">إلى الساعة</label><input type="time" id="et" value="${st.endT}"></div>`
+        : `<div class="chips">${custom || '<span class="small">مفيش ساعات. أضف ساعة تحت.</span>'}</div>
+          <div class="field"><label for="newt" style="min-width:60px;font-size:13px;font-weight:600">ساعة جديدة</label><input type="time" id="newt" value="12:00"><button class="btn primary" data-act="add-time">إضافة</button></div>`}
+        <div class="small">هيتبعت إشعار الساعة: ${times.length ? times.join(' · ') : 'ولا ساعة'}</div>
+        <div class="field"><label for="rtext" style="min-width:60px;font-size:13px;font-weight:600">نص التذكير</label><input id="rtext" value="${esc(st.remindText)}"></div>
+        <div class="row"><button class="btn ghost grow" data-act="test-remind">جرّب التذكير</button><button class="btn primary grow" data-act="apply-remind">حفظ وتطبيق</button></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">الذكاء الاصطناعي (Claude) - اختياري</div>
+        <div class="small">لما المساعد المحلي مش متأكد من تصنيف أو ما يفهمش الجملة، بيسأل Claude. محتاج نت، والنص اللي بتكتبه بس هو اللي بيتبعت (من غير أرصدتك). تكلفته صغيرة جداً، وتقدر تحط حد صرف على المفتاح من حساب Anthropic.</div>
+        <label class="row" style="font-size:14px;font-weight:600"><input type="checkbox" id="aion" ${st.aiOn ? 'checked' : ''} style="width:22px;height:22px"> استخدم Claude</label>
+        <div class="field"><label for="aikey" style="min-width:60px;font-size:13px;font-weight:600">المفتاح</label><input id="aikey" type="password" dir="ltr" autocomplete="off" placeholder="sk-ant-..." value="${esc(st.aiKey)}"></div>
+        <div class="field"><label for="aimodel" style="min-width:60px;font-size:13px;font-weight:600">النموذج</label><select id="aimodel"><option value="claude-haiku-5-5"${st.aiModel === 'claude-haiku-5-5' ? ' selected' : ''}>Haiku 5.5 (أسرع وأرخص)</option><option value="claude-sonnet-5-5"${st.aiModel === 'claude-sonnet-5-5' ? ' selected' : ''}>Sonnet 5.5 (أذكى)</option></select></div>
+        <div class="row"><button class="btn ghost grow" data-act="ai-test">اختبار الاتصال</button></div>
+        <div class="small">المفتاح بيتحفظ على موبايلك بس. استخدم مفتاح مخصص للتطبيق ده.</div></div>
+      <div class="card"><details><summary>ميزانية شهرية لكل تصنيف</summary><div style="display:flex;flex-direction:column;gap:8px;padding-top:8px">${budgets}</div></details></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">نسخة احتياطية</div><div class="row"><button class="btn ghost grow" data-act="export">تصدير</button><button class="btn ghost grow" data-act="import">استيراد</button></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">عن التطبيق</div><div class="small">الإصدار ${APP_VERSION}. التحديثات بتوصلك تلقائياً لما تفتح التطبيق وفيه نت، من غير إعادة تثبيت.</div><button class="btn ghost" data-act="refresh-app">تحديث الآن</button></div></div>`;
+  }
+
+  function sheetHtml() {
+    const sh = ui.sheet; if (!sh) return '';
+    let body = '';
+    if (sh.type === 'onboard') {
+      body = `<div class="h" style="font-size:18px">أهلاً بيك في محفظتي</div><div class="small">اكتب رصيدك الحالي في كل حساب (ممكن تسيبه صفر وتعدّله بعدين).</div>
+        ${ACC_IDS.map((a) => `<div class="field"><label style="min-width:90px;font-weight:700" for="o_${a}">${ACC[a]}</label><input id="o_${a}" data-open="${a}" inputmode="decimal" value="${S.opening[a] || ''}" placeholder="0"></div>`).join('')}
+        <button class="btn primary big" data-act="onboard-ok">ابدأ</button>`;
+    } else if (sh.type === 'acc') {
+      const b = balances()[sh.id]; const list = S.txs.filter((t) => t.acc === sh.id || t.to === sh.id).sort((a, c) => c.ts - a.ts).slice(0, 12);
+      body = `<div class="h" style="font-size:18px">${ACC[sh.id]}</div><div style="font-size:30px;font-weight:800">${fmt(b)} ج.م</div>
+        <div class="field"><label for="op" style="min-width:110px;font-size:13px;font-weight:600">الرصيد الافتتاحي</label><input id="op" data-open="${sh.id}" inputmode="decimal" value="${S.opening[sh.id] || ''}" placeholder="0"></div>
+        <div class="small">لتحويل فلوس بين حساباتك اكتب مثلاً: حولت 500 من انستا للكاش</div>
+        ${list.map(txRow).join('') || '<div class="small">مفيش عمليات.</div>'}
+        <button class="btn primary" data-act="close">تم</button>`;
+    } else if (sh.type === 'tx') {
+      const t = S.txs.find((x) => x.id === sh.id); if (!t) return '';
+      if (t.type === 'xfer') body = `<div class="h">تحويل ${fmt(t.amount)} من ${ACC[t.acc]} إلى ${ACC[t.to]}</div><div class="row"><button class="btn red grow" data-act="del-tx" data-id="${t.id}">حذف</button><button class="btn ghost grow" data-act="close">إغلاق</button></div>`;
+      else body = `<div class="h">${esc(t.label || catOf(t.cat).name)} · ${fmt(t.amount)} ج.م</div>
+        <div class="field"><label style="min-width:80px;font-size:13px;font-weight:600" for="tc">التصنيف</label><select id="tc" data-txcat="${t.id}">${catOptions(t.type, t.cat)}</select></div>
+        <div class="small">لو غيّرت التصنيف هتعلّم المساعد إن "${esc(t.label)}" يعني ${''}التصنيف الجديد.</div>
+        <div class="row"><button class="btn red grow" data-act="del-tx" data-id="${t.id}">حذف</button><button class="btn primary grow" data-act="close">تم</button></div>`;
+    } else if (sh.type === 'day') {
+      const { y, m } = ui.vm; const arr = inMonth(y, m).filter((t) => new Date(t.ts).getDate() === sh.d).sort((a, c) => c.ts - a.ts);
+      body = `<div class="h" style="font-size:18px">${sh.d} ${MONTHS[m]}</div>${arr.map(txRow).join('') || '<div class="small">مفيش عمليات في اليوم ده.</div>'}<button class="btn primary" data-act="close">تم</button>`;
+    } else if (sh.type === 'export') {
+      body = `<div class="h">نسخة احتياطية</div><div class="small">انسخ النص ده واحفظه (مثلاً في ملاحظات أو رسالة لنفسك).</div><textarea id="exp" readonly>${esc(JSON.stringify(S))}</textarea>
+        <div class="row"><button class="btn primary grow" data-act="copy-exp">نسخ</button><button class="btn ghost grow" data-act="close">إغلاق</button></div>`;
+    } else if (sh.type === 'import') {
+      body = `<div class="h">استيراد نسخة احتياطية</div><div class="small warn">ده هيستبدل كل بياناتك الحالية.</div><textarea id="imp" placeholder="الصق النص هنا"></textarea>
+        <div class="row"><button class="btn primary grow" data-act="do-import">استيراد</button><button class="btn ghost grow" data-act="close">إلغاء</button></div>`;
+    }
+    return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">${body}</div></div>`;
+  }
+
+  function tabsHtml() {
+    const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('year', 'السنة')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات')}</div></nav>`;
+  }
+
+  function render() {
+    const keepFocus = document.activeElement && document.activeElement.id; const pos = document.activeElement && document.activeElement.selectionStart;
+    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
+    $('#app').innerHTML = body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    if (keepFocus) { const el = document.getElementById(keepFocus); if (el && !ui.sheet) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
+  }
+
+  /* ---------- منطق ---------- */
+  function submitText() {
+    const text = ui.text.trim(); if (!text) { toast('اكتب مصروفك الأول، مثلاً: 50 بنزين و10 زيت'); return; }
+    const r = engine.parse(text);
+    if (r.kind === 'query') { answerQuery(text); ui.text = ''; ui.tab = 'assistant'; render(); return; }
+    if (r.kind === 'transfer') { ui.draft = { kind: 'transfer', amount: r.amount, from: r.from, to: r.to, dateOffset: r.dateOffset }; render(); return; }
+    const useAI = !!(S.settings.aiOn && S.settings.aiKey && (!r.items.length || r.items.some((it) => it.conf === 'low')));
+    if (!r.items.length && !useAI) { toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف، مثلاً: 50 فطار'); return; }
+    r.items.forEach((it) => { it.acc = it.acc || S.settings.lastAcc; it.origCat = it.cat; });
+    const token = uid();
+    ui.draft = { kind: 'entry', items: r.items, dateOffset: r.dateOffset, ai: useAI ? 'pending' : '', token };
+    render();
+    if (useAI) {
+      aiParse(text).then((items) => {
+        if (!ui.draft || ui.draft.token !== token) return;
+        if (items && items.length) {
+          ui.draft.items = items.map((it) => ({ amount: it.amount, label: it.label, type: it.type, cat: it.cat, origCat: it.cat, acc: it.acc || S.settings.lastAcc, conf: 'mid' }));
+          ui.draft.ai = 'done';
+        } else { ui.draft.ai = r.items.length ? '' : 'error'; if (!r.items.length) { ui.draft = null; toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف.'); return; } }
+        render();
+      }).catch(() => {
+        if (!ui.draft || ui.draft.token !== token) return;
+        if (!r.items.length) { ui.draft = null; toast('ما قدرتش أوصل لـClaude ولا لقيت مبلغ في كلامك.'); } else { ui.draft.ai = 'error'; }
+        render();
+      });
+    }
+  }
+
+  /* ---------- Claude (اختياري) ---------- */
+  async function callClaude(system, text, maxTokens) {
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', signal: ctl.signal,
+        headers: { 'content-type': 'application/json', 'x-api-key': S.settings.aiKey.trim(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: S.settings.aiModel, max_tokens: maxTokens || 500, system, messages: [{ role: 'user', content: text }] }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      return (j.content || []).map((c) => c.text || '').join('');
+    } finally { clearTimeout(to); }
+  }
+  async function aiParse(text) {
+    const out = A.CATS_OUT.map((c) => `${c.id}=${c.name}`).join('، '); const inn = A.CATS_IN.map((c) => `${c.id}=${c.name}`).join('، ');
+    const system = 'أنت مساعد داخل تطبيق مصاريف مصري. حوّل رسالة المستخدم (بالعامية المصرية) إلى بنود. ' +
+      'ردّك JSON فقط بدون أي شرح ولا علامات كود، بالشكل: {"items":[{"amount":رقم,"label":"وصف قصير بالعربي","type":"out" أو "in","category":"معرّف التصنيف","account":"cash" أو "wallet" أو "insta" أو null}]}. ' +
+      `تصنيفات المصروف: ${out}. تصنيفات الدخل: ${inn}. الحسابات: cash=نقدي، wallet=محفظة (فودافون كاش وغيرها)، insta=انستا باي. ` +
+      'استخدم سياق الرسالة لحسم الكلمات الملتبسة (مثلاً "بنزين وزيت" يعني زيت العربية = vehicle). لو مفيش مبلغ رجّع {"items":[]}.';
+    const txt = await callClaude(system, text, 500);
+    const m = txt.match(/\{[\s\S]*\}/); if (!m) throw new Error('bad json');
+    const obj = JSON.parse(m[0]); const arr = Array.isArray(obj.items) ? obj.items : [];
+    return arr.map((it) => {
+      const type = it.type === 'in' ? 'in' : 'out'; const pool = (type === 'in' ? A.CATS_IN : A.CATS_OUT).map((c) => c.id);
+      return { amount: Math.abs(parseFloat(it.amount)) || 0, label: String(it.label || '').slice(0, 60), type, cat: pool.indexOf(it.category) >= 0 ? it.category : (type === 'in' ? 'in_other' : 'other'), acc: ACC_IDS.indexOf(it.account) >= 0 ? it.account : null };
+    }).filter((it) => it.amount > 0);
+  }
+  function answerQuery(text) { ui.chat.push({ q: text, a: engine.answer(text, S.txs, Date.now(), balances()) }); }
+
+  function saveDraft() {
+    const d = ui.draft; if (!d) return; const now = Date.now();
+    const ts = d.dateOffset ? startOfDay(now) + d.dateOffset * DAY + 12 * 36e5 : now;
+    if (d.kind === 'transfer') {
+      S.txs.push({ id: uid(), ts, type: 'xfer', amount: d.amount, acc: d.from, to: d.to, label: 'تحويل', cat: 'other' });
+      ui.draft = null; ui.text = ''; save(); toast('اتسجل التحويل'); return;
+    }
+    const good = d.items.filter((it) => +it.amount > 0); const notes = [];
+    good.forEach((it, i) => {
+      const amount = +it.amount; S.txs.push({ id: uid(), ts: ts + i, type: it.type, amount, label: (it.label || '').trim(), cat: it.cat, acc: it.acc });
+      const corrected = it.cat !== it.origCat;
+      engine.learn(it.label, it.cat, corrected);
+      if (corrected && it.label) notes.push(`اتعلمت إن "${it.label.trim()}" = ${catOf(it.cat).name}`);
+    });
+    if (good.length) S.settings.lastAcc = good[good.length - 1].acc;
+    ui.draft = null; ui.text = ''; S.settings.lastReminder = Date.now(); save();
+    toast(notes.length ? notes.join(' · ') : `اتسجل ${good.length} ${good.length > 1 ? 'عمليات' : 'عملية'}`);
+  }
+
+  /* ---------- أحداث ---------- */
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-act]'); if (!el) return; const a = el.dataset.act;
+    if (a === 'scrim') { if (e.target === el) { ui.sheet = null; render(); } return; }
+    const idx = +el.dataset.i;
+    switch (a) {
+      case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
+      case 'ex': ui.text = el.dataset.t; render(); break;
+      case 'exq': ui.q = el.dataset.t; doAsk(); break;
+      case 'parse': syncInputs(); submitText(); break;
+      case 'cancel-draft': ui.draft = null; render(); break;
+      case 'save-draft': syncInputs(); saveDraft(); break;
+      case 'del-item': ui.draft.items.splice(idx, 1); if (!ui.draft.items.length) ui.draft = null; render(); break;
+      case 'type': { const it = ui.draft.items[idx]; it.type = el.dataset.v; const ok = (it.type === 'in' ? A.CATS_IN : A.CATS_OUT).some((c) => c.id === it.cat); if (!ok) it.cat = it.type === 'in' ? 'in_other' : 'other'; render(); break; }
+      case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
+      case 'tx': ui.sheet = { type: 'tx', id: el.dataset.id }; render(); break;
+      case 'day': ui.sheet = { type: 'day', d: +el.dataset.d }; render(); break;
+      case 'close': ui.sheet = null; render(); break;
+      case 'del-tx': S.txs = S.txs.filter((t) => t.id !== el.dataset.id); ui.sheet = null; save(); render(); break;
+      case 'mprev': ui.vm.m--; if (ui.vm.m < 0) { ui.vm.m = 11; ui.vm.y--; } render(); break;
+      case 'mnext': ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
+      case 'yprev': ui.vy--; render(); break;
+      case 'ynext': ui.vy++; render(); break;
+      case 'gomonth': ui.vm = { y: ui.vy, m: +el.dataset.m }; ui.tab = 'month'; render(); break;
+      case 'ask': ui.q = ($('#qinp') || {}).value || ui.q; doAsk(); break;
+      case 'forget': engine.forget(el.dataset.k); save(); render(); break;
+      case 'onboard-ok': S.settings.onboarded = true; ui.sheet = null; save(); render(); applyReminders(true); break;
+      case 'export': ui.sheet = { type: 'export' }; render(); break;
+      case 'import': ui.sheet = { type: 'import' }; render(); break;
+      case 'copy-exp': { const ta = $('#exp'); ta.select(); try { (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(() => toast('اتنسخ')).catch(() => { document.execCommand('copy'); toast('اتنسخ'); }); } catch (er) { document.execCommand('copy'); toast('اتنسخ'); } break; }
+      case 'do-import': doImport(); break;
+      case 'test-remind': testReminder(); break;
+      case 'apply-remind': syncSettings(); save(); applyReminders(true); break;
+      case 'rmode': S.settings.remindMode = el.dataset.v; save(); render(); applyReminders(false); break;
+      case 'add-time': { const v = ($('#newt') || {}).value; if (v && S.settings.times.indexOf(v) < 0) { S.settings.times.push(v); save(); render(); applyReminders(false); } break; }
+      case 'del-time': S.settings.times = S.settings.times.filter((x) => x !== el.dataset.t); save(); render(); applyReminders(false); break;
+      case 'ai-test': syncSettings(); save(); aiTest(); break;
+      case 'refresh-app': refreshApp(); break;
+      case 'banner-open': ui.banner = false; ui.tab = 'home'; render(); setTimeout(() => { const i = $('#inp'); if (i) i.focus(); }, 50); break;
+      case 'banner-skip': ui.banner = false; S.settings.lastReminder = Date.now(); save(); render(); break;
+      default: break;
+    }
+  });
+  function doAsk() { if (!ui.q.trim()) return; answerQuery(ui.q); ui.q = ''; ui.tab = 'assistant'; render(); }
+  function doImport() {
+    try { const d = JSON.parse($('#imp').value); if (!d || !Array.isArray(d.txs)) throw new Error('bad'); S = Object.assign(defaults(), d); Object.keys(engine.learned).forEach((k) => delete engine.learned[k]); Object.assign(engine.learned, S.learned); S.learned = engine.learned; save(); ui.sheet = null; render(); toast('تم الاستيراد'); } catch (e) { toast('النص غير صالح'); }
+  }
+  function syncInputs() {
+    const inp = $('#inp'); if (inp) ui.text = inp.value;
+    if (ui.draft && ui.draft.items) document.querySelectorAll('.ditem').forEach((box) => {
+      const it = ui.draft.items[+box.dataset.i]; if (!it) return;
+      it.amount = box.querySelector('[data-f=amount]').value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+      it.label = box.querySelector('[data-f=label]').value; it.cat = box.querySelector('[data-f=cat]').value; it.acc = box.querySelector('[data-f=acc]').value;
+    });
+  }
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.id === 'inp') ui.text = t.value; else if (t.id === 'qinp') ui.q = t.value;
+    else if (t.id === 'rtext') { S.settings.remindText = t.value; save(); }
+    else if (t.id === 'aikey') { S.settings.aiKey = t.value; save(); }
+    else if (t.dataset.bud) { const v = parseFloat(t.value); if (v > 0) S.budgets[t.dataset.bud] = v; else delete S.budgets[t.dataset.bud]; save(); }
+    else if (t.dataset.open) { S.opening[t.dataset.open] = parseFloat(t.value) || 0; save(); }
+  });
+  document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.f === 'cat' || t.dataset.f === 'acc') { syncInputs(); render(); }
+    else if (t.dataset.txcat) { const tx = S.txs.find((x) => x.id === t.dataset.txcat); if (tx) { const was = tx.cat; tx.cat = t.value; if (was !== tx.cat) { engine.learn(tx.label, tx.cat, true); toast(`اتعلمت إن "${tx.label}" = ${catOf(tx.cat).name}`); } save(); render(); } }
+    else if (t.id === 'remind') { S.settings.remind = t.checked; save(); applyReminders(false); }
+    else if (t.id === 'every') { S.settings.everyH = +t.value; save(); render(); applyReminders(false); }
+    else if (t.id === 'st' && t.value) { S.settings.startT = t.value; save(); render(); applyReminders(false); }
+    else if (t.id === 'et' && t.value) { S.settings.endT = t.value; save(); render(); applyReminders(false); }
+    else if (t.id === 'aion') { S.settings.aiOn = t.checked; save(); }
+    else if (t.id === 'aimodel') { S.settings.aiModel = t.value; save(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.id === 'inp' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ui.text = e.target.value; submitText(); }
+    if (e.target.id === 'qinp' && e.key === 'Enter') { e.preventDefault(); ui.q = e.target.value; doAsk(); }
+  });
+
+  /* ---------- التذكير ---------- */
+  const cap = (n) => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[n]) || null;
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const toMin = (t) => { const p = String(t || '0:0').split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0); };
+  function reminderTimes() {
+    const st = S.settings;
+    if (st.remindMode === 'custom') return Array.from(new Set(st.times || [])).sort();
+    const a = toMin(st.startT); let b = toMin(st.endT); if (b < a) b += 1440; const step = Math.max(1, +st.everyH || 2) * 60; const out = [];
+    for (let x = a; x <= b && out.length < 24; x += step) { const m = x % 1440; out.push(pad2(Math.floor(m / 60)) + ':' + pad2(m % 60)); }
+    return out;
+  }
+  function showBanner() { ui.banner = true; render(); window.scrollTo(0, 0); }
+  function syncSettings() {
+    const g = (id) => document.getElementById(id);
+    if (g('rtext')) S.settings.remindText = g('rtext').value || defaults().settings.remindText;
+    if (g('aikey')) S.settings.aiKey = g('aikey').value;
+  }
+  async function applyReminders(announce) {
+    const LN = cap('LocalNotifications');
+    if (!LN) { if (announce) toast('إشعارات النظام بتشتغل في تطبيق الأندرويد. هنا التذكير بيظهر جوه التطبيق وهو مفتوح.'); return; }
+    try {
+      const perm = await LN.requestPermissions();
+      if (perm.display !== 'granted') { if (announce) toast('لازم تسمح بالإشعارات من إعدادات التليفون'); return; }
+      await LN.createChannel({ id: 'reminders', name: 'تذكير المصاريف', description: 'تذكير تسجيل المصاريف', importance: 4, visibility: 1, vibration: true });
+      await LN.registerActionTypes({ types: [{ id: 'REMINDER', actions: [{ id: 'open', title: 'فتح' }, { id: 'skip', title: 'تخطي' }] }] });
+      const pend = await LN.getPending(); if (pend.notifications.length) await LN.cancel({ notifications: pend.notifications });
+      if (!S.settings.remind) { if (announce) toast('التذكير متوقف'); return; }
+      const list = reminderTimes();
+      await LN.schedule({ notifications: list.map((t) => ({ id: 1000 + toMin(t), title: 'محفظتي', body: S.settings.remindText, channelId: 'reminders', actionTypeId: 'REMINDER', schedule: { on: { hour: Math.floor(toMin(t) / 60), minute: toMin(t) % 60 }, allowWhileIdle: true } })) });
+      if (announce) toast(list.length ? `اتضبط التذكير ${list.length} مرات يومياً: ${list.join(' · ')}` : 'مفيش ساعات للتذكير');
+    } catch (e) { if (announce) toast('ما قدرتش أضبط التذكير: ' + (e && e.message ? e.message : '')); }
+  }
+  async function testReminder() {
+    const LN = cap('LocalNotifications');
+    if (LN) {
+      try { await LN.requestPermissions(); await LN.schedule({ notifications: [{ id: 999, title: 'محفظتي', body: S.settings.remindText, channelId: 'reminders', actionTypeId: 'REMINDER', schedule: { at: new Date(Date.now() + 4000), allowWhileIdle: true } }] }); toast('هيجيلك إشعار بعد ثواني. اطلع من التطبيق وشوفه.'); return; } catch (e) { /* نكمل ببانر */ }
+    }
+    ui.tab = 'home'; showBanner();
+  }
+  async function aiTest() {
+    if (!S.settings.aiKey) { toast('اكتب المفتاح الأول'); return; }
+    toast('بختبر الاتصال…', 20000);
+    try { const t = await callClaude('رد بكلمة واحدة فقط: تمام', 'اختبار', 20); toast(t ? 'الاتصال شغال ✔' : 'اتصلت لكن مفيش رد'); } catch (e) { toast('فشل الاتصال: ' + (e && e.message ? e.message : '') + '. تأكد من المفتاح والنت.', 5000); }
+  }
+  async function refreshApp() {
+    try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } } catch (e) { /* ignore */ }
+    location.reload();
+  }
+  (function listenNotif() {
+    const LN = cap('LocalNotifications'); if (!LN) return;
+    LN.addListener('localNotificationActionPerformed', (ev) => {
+      if (ev.actionId === 'skip') { const App = cap('App'); if (App && App.minimizeApp) App.minimizeApp(); return; }
+      ui.tab = 'home'; render(); setTimeout(() => { const i = $('#inp'); if (i) i.focus(); }, 150);
+    });
+  })();
+  // في المتصفح أو والتطبيق مفتوح: بانر عند كل ساعة تذكير
+  function checkBanner() {
+    if (!S.settings.remind || cap('LocalNotifications') || ui.banner || document.visibilityState !== 'visible') return;
+    const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes(); let due = -1;
+    reminderTimes().forEach((t) => { const m = toMin(t); if (m <= nowMin && m > due) due = m; });
+    if (due < 0 || nowMin - due > 30) return;
+    const dueTs = startOfDay(now.getTime()) + due * 6e4;
+    if ((S.settings.lastBanner || 0) >= dueTs) return;
+    S.settings.lastBanner = Date.now(); save();
+    if (Date.now() - (S.settings.lastReminder || 0) < 30 * 6e4) return; // سجّلت من شوية
+    showBanner();
+  }
+  setInterval(checkBanner, 30000);
+
+  if (!S.settings.onboarded) ui.sheet = { type: 'onboard' };
+  render();
+  applyReminders(false);
+  window.__mahfazty = { S: () => S, ui, render, engine, reminderTimes, checkBanner };
+})();
