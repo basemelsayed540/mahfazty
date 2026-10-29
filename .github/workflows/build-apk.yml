@@ -7,11 +7,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Check signing secret first
+        env:
+          BUNDLE: ${{ secrets.KEYSTORE_BUNDLE }}
+        run: |
+          if [ -z "$BUNDLE" ]; then echo "::error::السر KEYSTORE_BUNDLE مش موجود. ضيفه من Settings > Secrets and variables > Actions"; exit 1; fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
