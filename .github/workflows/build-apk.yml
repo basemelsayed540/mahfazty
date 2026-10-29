@@ -1,6 +1,8 @@
 name: Build APK (مرة واحدة)
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,19 +27,25 @@ jobs:
       - run: npx cap sync android
       - name: Decode signing key
         env:
-          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          BUNDLE: ${{ secrets.KEYSTORE_BUNDLE }}
         run: |
-          test -n "$KS" || { echo "Missing secret ANDROID_KEYSTORE_B64"; exit 1; }
-          echo "$KS" | base64 -d > "$RUNNER_TEMP/mahfazty.keystore"
+          test -n "$BUNDLE" || { echo "Missing secret KEYSTORE_BUNDLE"; exit 1; }
+          echo "$BUNDLE" | head -n1 | tr -d '\r\n' > "$RUNNER_TEMP/ks.pass"
+          echo "$BUNDLE" | tail -n +2 | tr -d '\r\n ' | base64 -d > "$RUNNER_TEMP/mahfazty.keystore"
       - run: chmod +x android/gradlew
       - name: Build signed release APK
         working-directory: android
         env:
           RUN_NUMBER: ${{ github.run_number }}
           KEYSTORE_PATH: ${{ runner.temp }}/mahfazty.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        run: ./gradlew assembleRelease
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mahfazty-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+        run: |
+          export KEYSTORE_PASSWORD="$(cat "$RUNNER_TEMP/ks.pass")"
+          ./gradlew assembleRelease
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk mahfazty.apk
+      - name: Publish download link (GitHub Release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-apk --yes --cleanup-tag || true
+          gh release create latest-apk mahfazty.apk --title "محفظتي - APK" --notes "نزّل mahfazty.apk وثبّته. نسخة رقم ${{ github.run_number }}" --latest
