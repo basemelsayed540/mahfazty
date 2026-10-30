@@ -11,7 +11,8 @@
   /* ---------- التخزين ---------- */
   function defaults() {
     return { v: 1, opening: { cash: 0, wallet: 0, insta: 0 }, txs: [], learned: {}, budgets: {},
-      settings: { remind: true, remindMode: 'interval', everyH: 2, startT: '09:00', endT: '22:00', times: ['09:00', '13:00', '18:00', '21:00'], remindText: 'صرفت حاجة في آخر ساعتين؟ سجّلها دلوقتي', lastAcc: 'cash', onboarded: false, lastReminder: 0, lastBanner: 0, aiOn: false, aiKey: '', aiModel: 'claude-haiku-5-5' } };
+      settings: { remind: true, remindMode: 'interval', everyH: 2, startT: '09:00', endT: '22:00', times: ['09:00', '13:00', '18:00', '21:00'], remindText: 'صرفت حاجة في آخر ساعتين؟ سجّلها دلوقتي', lastAcc: 'cash', onboarded: false, lastReminder: 0, lastBanner: 0, aiOn: false, aiKey: '', aiModel: 'claude-haiku-5-5', theme: 'auto', seenVersion: '' },
+      catConfig: { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {} } };
   }
   function load() {
     try {
@@ -21,18 +22,22 @@
     return defaults();
   }
   let S = load();
+  const normCfg = () => { S.catConfig = Object.assign({ custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {} }, S.catConfig || {}); };
+  normCfg();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
   const engine = A.create(S.learned);
+  engine.setConfig(S.catConfig);
+  function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.1.0';
-  const ui = { tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
+  const APP_VERSION = '1.2.0';
+  const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (n) => (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const catOf = (id) => A.CAT_BY_ID[id] || A.CAT_BY_ID.other;
+  const catOf = (id) => engine.catOf(id);
   const chip = (id) => { const c = catOf(id); return `<span class="catchip" style="background:${c.color}">${esc(c.name)}</span>`; };
   function timeStr(ts) { const d = new Date(ts); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'م' : 'ص'; h = h % 12 || 12; return `${h}:${m} ${ap}`; }
   const startOfDay = (ts) => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
@@ -68,7 +73,7 @@
     const tin = sumBy(today, 'in'); const tout = sumBy(today, 'out');
     const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
     return `<div class="screen">${bannerHtml()}
-      <div class="total"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
+      <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
       <div class="stack">
         <button class="acard cash" data-act="acc" data-id="cash" aria-label="نقدي ${fmt(b.cash)}"><span>نقدي</span><b>${fmt(b.cash)}</b></button>
         <button class="acard wallet" data-act="acc" data-id="wallet" aria-label="محفظة ${fmt(b.wallet)}"><span>محفظة</span><b>${fmt(b.wallet)}</b></button>
@@ -99,7 +104,8 @@
   }
 
   function catOptions(type, sel) {
-    const list = type === 'in' ? A.CATS_IN : A.CATS_OUT;
+    const list = (type === 'in' ? engine.catsIn() : engine.catsOut()).slice();
+    if (sel && !list.some((c) => c.id === sel)) list.push(engine.catOf(sel));
     return list.map((c) => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
   }
   function accOptions(sel) { return ACC_IDS.map((a) => `<option value="${a}"${a === sel ? ' selected' : ''}>${ACC[a]}</option>`).join(''); }
@@ -146,7 +152,7 @@
     const accs = ACC_IDS.map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${ACC[a]}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
     return `<div class="screen">
       <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
-      <div class="tiles3"><div class="tile" style="background:var(--teal)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--red)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purple)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
+      <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">خريطة الصرف اليومي</span><span class="small">الغامق = صرف أكتر</span></div>
         <div class="dow"><span>سبت</span><span>أحد</span><span>اثنين</span><span>ثلاثاء</span><span>أربعاء</span><span>خميس</span><span>جمعة</span></div><div class="days">${cells}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
@@ -168,7 +174,7 @@
     const saving = inc ? Math.round((inc - out) / inc * 100) : 0;
     return `<div class="screen">
       <div class="nav"><button data-act="yprev" aria-label="السنة السابقة">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">سنة ${y}</div><div class="small">حساب السنة</div></div><button data-act="ynext" aria-label="السنة التالية">‹</button></div>
-      <div style="background:var(--purple);color:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:13px;font-weight:600">توفير السنة</div><div style="font-size:36px;font-weight:800;line-height:1.15">${inc - out >= 0 ? '+' : '-'}${fmt(Math.abs(inc - out))} <span style="font-size:16px;font-weight:600">ج.م</span></div><div class="row between" style="font-size:13px;font-weight:700;padding-top:6px"><span>دخل ${fmt(inc)}</span><span>مصروف ${fmt(out)}</span></div></div>
+      <div style="background:var(--purplef);color:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:13px;font-weight:600">توفير السنة</div><div style="font-size:36px;font-weight:800;line-height:1.15">${inc - out >= 0 ? '+' : '-'}${fmt(Math.abs(inc - out))} <span style="font-size:16px;font-weight:600">ج.م</span></div><div class="row between" style="font-size:13px;font-weight:700;padding-top:6px"><span>دخل ${fmt(inc)}</span><span>مصروف ${fmt(out)}</span></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="row between"><span class="h">صافي كل شهر</span><span class="small">أخضر = الأفضل · أحمر = الأقل</span></div><div class="mgrid">${tiles}</div></div>
       <div class="tiles2"><div class="stat"><small>متوسط المصروف شهرياً</small><b>${fmt(out / months)}</b></div><div class="stat"><small>نسبة التوفير</small><b style="color:var(--teal)">${saving}%</b></div>
         <div class="stat"><small>أكتر شهر صرفاً</small><b>${maxO ? MONTHS[maxO.m] : '-'}</b></div><div class="stat"><small>عدد العمليات</small><b>${yarr.filter((t) => t.type !== 'xfer').length}</b></div></div>
@@ -214,7 +220,7 @@
 
   function settingsHtml() {
     const st = S.settings; const times = reminderTimes();
-    const budgets = A.CATS_OUT.filter((c) => c.id !== 'other').map((c) => `<div class="field"><label style="min-width:110px;font-size:13px;font-weight:600" for="b_${c.id}">${esc(c.name)}</label><input id="b_${c.id}" data-bud="${c.id}" inputmode="numeric" placeholder="بدون حد" value="${S.budgets[c.id] || ''}"></div>`).join('');
+    const budgets = engine.catsOut().filter((c) => c.id !== 'other').map((c) => `<div class="field"><label style="min-width:110px;font-size:13px;font-weight:600" for="b_${c.id}">${esc(c.name)}</label><input id="b_${c.id}" data-bud="${c.id}" inputmode="numeric" placeholder="بدون حد" value="${S.budgets[c.id] || ''}"></div>`).join('');
     const everyOpts = [1, 2, 3, 4, 6, 8].map((h) => `<option value="${h}"${h === st.everyH ? ' selected' : ''}>كل ${h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : h + ' ساعات'}</option>`).join('');
     const custom = (st.times || []).slice().sort().map((t) => `<span class="chip" style="display:inline-flex;gap:6px;align-items:center;color:var(--ink)">${t}<button class="xbtn" style="min-width:24px;min-height:24px" data-act="del-time" data-t="${t}" aria-label="حذف ${t}">✕</button></span>`).join('');
     return `<div class="screen">${bannerHtml()}
@@ -238,9 +244,86 @@
         <div class="field"><label for="aimodel" style="min-width:60px;font-size:13px;font-weight:600">النموذج</label><select id="aimodel"><option value="claude-haiku-5-5"${st.aiModel === 'claude-haiku-5-5' ? ' selected' : ''}>Haiku 5.5 (أسرع وأرخص)</option><option value="claude-sonnet-5-5"${st.aiModel === 'claude-sonnet-5-5' ? ' selected' : ''}>Sonnet 5.5 (أذكى)</option></select></div>
         <div class="row"><button class="btn ghost grow" data-act="ai-test">اختبار الاتصال</button></div>
         <div class="small">المفتاح بيتحفظ على موبايلك بس. استخدم مفتاح مخصص للتطبيق ده.</div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المظهر</div>
+        <div class="seg" role="group" aria-label="المظهر"><button class="${(st.theme || 'auto') === 'auto' ? 'on' : ''}" data-act="theme" data-v="auto">تلقائي</button><button class="${st.theme === 'light' ? 'on' : ''}" data-act="theme" data-v="light">فاتح</button><button class="${st.theme === 'dark' ? 'on' : ''}" data-act="theme" data-v="dark">داكن</button></div>
+        <div class="small">"تلقائي" يمشي مع وضع الموبايل.</div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">التصنيفات</div>
+        <div class="small">اضغط على تصنيف لتغيير اسمه أو لونه أو الكلمات اللي بتتصنف تحته.</div>
+        <div class="small" style="margin-top:2px">المصروفات</div><div class="chips">${engine.catsOut().map(catChipBtn).join('')}</div>
+        <div class="small">الدخل</div><div class="chips">${engine.catsIn().map(catChipBtn).join('')}</div>
+        ${hiddenCatsHtml()}
+        <button class="btn primary" data-act="cat-new">+ تصنيف جديد</button></div>
+      <div class="card"><button class="btn ghost" style="width:100%" data-act="whatsnew">جديد في التطبيق${S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''}</button></div>
       <div class="card"><details><summary>ميزانية شهرية لكل تصنيف</summary><div style="display:flex;flex-direction:column;gap:8px;padding-top:8px">${budgets}</div></details></div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">نسخة احتياطية</div><div class="row"><button class="btn ghost grow" data-act="export">تصدير</button><button class="btn ghost grow" data-act="import">استيراد</button></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">عن التطبيق</div><div class="small">الإصدار ${APP_VERSION}. التحديثات بتوصلك تلقائياً لما تفتح التطبيق وفيه نت، من غير إعادة تثبيت.</div><button class="btn ghost" data-act="refresh-app">تحديث الآن</button></div></div>`;
+  }
+
+  /* ---------- مساعدات الشاشات الجديدة ---------- */
+  const SWATCHES = ['#B84A0B', '#4A3AA8', '#0B6E6E', '#A8281C', '#2F6FB5', '#1F8A4C', '#9B3F8E', '#7A5C00', '#C2417A', '#6B4F3A'];
+  const swatchesHtml = (sel, act) => `<div class="swatches" role="group" aria-label="اللون">${SWATCHES.map((c) => `<button class="sw${c === sel ? ' on' : ''}" style="background:${c}" data-act="${act}" data-c="${c}" aria-label="لون ${c}"></button>`).join('')}</div>`;
+  const catChipBtn = (c) => `<button class="chip" style="color:var(--ink);display:inline-flex;gap:6px;align-items:center" data-act="cat-open" data-id="${c.id}"><span style="width:10px;height:10px;border-radius:50%;background:${c.color};display:inline-block"></span>${esc(c.name)}</button>`;
+  function hiddenCatsHtml() {
+    const h = S.catConfig.hidden || []; if (!h.length) return '';
+    return `<div class="small">تصنيفات محذوفة (اضغط للاسترجاع)</div><div class="chips">${h.map((id) => `<button class="chip" style="color:var(--ink)" data-act="cat-restore" data-id="${id}">↺ ${esc(engine.catOf(id).name)}</button>`).join('')}</div>`;
+  }
+  const hhmm = (ts) => { const d = new Date(ts); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); };
+  const ymd = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+  const toDigits = (v) => String(v == null ? '' : v).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.');
+
+  function txEditHtml(sh) {
+    const t = sh.tx; const isX = t.type === 'xfer';
+    const typeSeg = isX ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button></div>`;
+    const fields = isX
+      ? `<div class="field"><label for="te_acc">من</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div><div class="field"><label for="te_to">إلى</label><select id="te_to" data-te="to">${accOptions(t.to)}</select></div>`
+      : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field"><label for="te_cat">التصنيف</label><select id="te_cat" data-te="cat">${catOptions(t.type, t.cat)}</select></div><div class="field"><label for="te_acc">الحساب</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div>`;
+    const actions = sh.confirm
+      ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
+      : `<div class="row"><button class="btn primary grow" data-act="tx-save">حفظ التعديل</button><button class="btn red" data-act="tx-del-ask">حذف</button><button class="btn ghost" data-act="close">إغلاق</button></div>`;
+    return `<div class="h" style="font-size:18px">${isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${typeSeg}
+      <div class="field"><label for="te_amount">المبلغ</label><input id="te_amount" data-te="amount" inputmode="decimal" value="${esc(t.amount)}"></div>${fields}
+      <div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
+      <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>${actions}`;
+  }
+  function wordChipsHtml(sh) {
+    const q = norm1(sh.filter); const all = engine.effectiveWords(sh.id); const words = all.filter((x) => !q || norm1(x.w).indexOf(q) >= 0).slice(0, 250);
+    return words.map((x) => `<span class="chip wchip${x.user ? ' user' : ''}">${esc(x.w)}<button class="xbtn" data-act="cat-delword" data-w="${esc(x.w)}" data-user="${x.user ? 1 : 0}" aria-label="حذف ${esc(x.w)}">✕</button></span>`).join('') || '<span class="small">مفيش كلمات.</span>';
+  }
+  const norm1 = (v) => A.norm(String(v || '')).trim();
+  function catSheetHtml(sh) {
+    const c = engine.catOf(sh.id); const prot = !!engine.PROTECTED[sh.id]; const used = S.txs.filter((t) => t.cat === sh.id).length;
+    const count = engine.effectiveWords(sh.id).length;
+    let del;
+    if (prot) del = '<div class="small">ده تصنيف أساسي بيستقبل أي حاجة مش مفهومة، فما ينفعش يتحذف. تقدر تغيّر اسمه ولونه.</div>';
+    else if (sh.confirm) {
+      const opts = (c.type === 'in' ? engine.catsIn() : engine.catsOut()).filter((x) => x.id !== sh.id).map((x) => `<option value="${x.id}"${x.id === sh.moveTo ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+      del = `<div class="warn">${used ? `فيه ${used} عملية في التصنيف ده. اختار تنقلها لأنهي تصنيف:` : 'متأكد من الحذف؟'}</div>${used ? `<select data-ce="moveTo" aria-label="انقل العمليات إلى">${opts}</select>` : ''}<div class="row"><button class="btn red grow" data-act="cat-del-do">تأكيد الحذف</button><button class="btn ghost grow" data-act="cat-del-cancel">لا</button></div>`;
+    } else del = '<button class="btn ghost" style="color:var(--red)" data-act="cat-del-ask">حذف التصنيف</button>';
+    return `<div class="h" style="font-size:18px">تعديل التصنيف</div>
+      <div class="field"><label for="ce_name">الاسم</label><input id="ce_name" data-ce="name" value="${esc(c.name)}"></div>
+      <div><div class="small" style="margin-bottom:6px">اللون</div>${swatchesHtml(c.color, 'cat-color')}</div>
+      <div class="h">الكلمات (${count})</div><div class="small">أي كلمة هنا بتتصنف تحت "${esc(c.name)}". الكلمات اللي أضفتها بإطار ملوّن.</div>
+      <div class="field"><input id="wfilter" data-ce="filter" data-keepfocus="1" aria-label="بحث في الكلمات" placeholder="ابحث في الكلمات" value="${esc(sh.filter || '')}"></div>
+      <div class="chips wordbox">${wordChipsHtml(sh)}</div>
+      <div class="field"><input id="newword" data-keepfocus="1" aria-label="كلمات جديدة" placeholder="أضف كلمات (افصل بمسافة)"><button class="btn primary" data-act="cat-addword">إضافة</button></div>
+      ${c.builtin ? '<button class="btn ghost" data-act="cat-reset">استرجاع الإعدادات الأصلية للتصنيف</button>' : ''}
+      ${del}<button class="btn primary" data-act="close">تم</button>`;
+  }
+  function newCatHtml(sh) {
+    return `<div class="h" style="font-size:18px">تصنيف جديد</div>
+      <div class="field"><label for="nc_name">الاسم</label><input id="nc_name" data-nc="name" value="${esc(sh.name)}" placeholder="مثال: إيجارات"></div>
+      <div class="seg" role="group" aria-label="النوع"><button class="${sh.ctype === 'out' ? 'on' : ''}" data-act="nc-type" data-v="out">مصروف</button><button class="${sh.ctype === 'in' ? 'on' : ''}" data-act="nc-type" data-v="in">دخل</button></div>
+      <div><div class="small" style="margin-bottom:6px">اللون</div>${swatchesHtml(sh.color, 'nc-color')}</div>
+      <div class="field"><label for="nc_words">الكلمات</label><textarea id="nc_words" data-nc="words" style="direction:rtl;font-size:14px;min-height:70px" placeholder="كلمات مفصولة بمسافة، مثال: ايجار شقه عقد">${esc(sh.words)}</textarea></div>
+      <div class="row"><button class="btn primary grow" data-act="nc-create">إنشاء</button><button class="btn ghost grow" data-act="close">إلغاء</button></div>`;
+  }
+  function whatsNewHtml() {
+    const cl = ui.changelog;
+    const list = cl && cl.versions ? cl.versions.map((v) => `<div class="card"><div class="row between"><b>الإصدار ${esc(v.v)}${v.v === APP_VERSION ? ' (الحالي)' : ''}</b><span class="small">${esc(v.date)}</span></div><div class="h" style="margin-top:4px">${esc(v.title)}</div><ul style="margin:6px 0 0;padding-inline-start:18px;line-height:1.9;font-size:14px">${v.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('') : '<div class="small">ما قدرتش أحمّل السجل. تأكد من النت وجرّب تاني.</div>';
+    return `<div class="h" style="font-size:18px">جديد في التطبيق</div>${list}<button class="btn primary" data-act="close">تم</button>`;
+  }
+  function updBarHtml() {
+    return ui.update ? `<div class="updbar" role="status"><span>في تحديث جديد (${esc(ui.update)})</span><button data-act="refresh-app">حدّث الآن</button></div>` : '';
   }
 
   function sheetHtml() {
@@ -258,15 +341,16 @@
         ${list.map(txRow).join('') || '<div class="small">مفيش عمليات.</div>'}
         <button class="btn primary" data-act="close">تم</button>`;
     } else if (sh.type === 'tx') {
-      const t = S.txs.find((x) => x.id === sh.id); if (!t) return '';
-      if (t.type === 'xfer') body = `<div class="h">تحويل ${fmt(t.amount)} من ${ACC[t.acc]} إلى ${ACC[t.to]}</div><div class="row"><button class="btn red grow" data-act="del-tx" data-id="${t.id}">حذف</button><button class="btn ghost grow" data-act="close">إغلاق</button></div>`;
-      else body = `<div class="h">${esc(t.label || catOf(t.cat).name)} · ${fmt(t.amount)} ج.م</div>
-        <div class="field"><label style="min-width:80px;font-size:13px;font-weight:600" for="tc">التصنيف</label><select id="tc" data-txcat="${t.id}">${catOptions(t.type, t.cat)}</select></div>
-        <div class="small">لو غيّرت التصنيف هتعلّم المساعد إن "${esc(t.label)}" يعني ${''}التصنيف الجديد.</div>
-        <div class="row"><button class="btn red grow" data-act="del-tx" data-id="${t.id}">حذف</button><button class="btn primary grow" data-act="close">تم</button></div>`;
+      body = sh.tx ? txEditHtml(sh) : '';
     } else if (sh.type === 'day') {
       const { y, m } = ui.vm; const arr = inMonth(y, m).filter((t) => new Date(t.ts).getDate() === sh.d).sort((a, c) => c.ts - a.ts);
       body = `<div class="h" style="font-size:18px">${sh.d} ${MONTHS[m]}</div>${arr.map(txRow).join('') || '<div class="small">مفيش عمليات في اليوم ده.</div>'}<button class="btn primary" data-act="close">تم</button>`;
+    } else if (sh.type === 'cat') {
+      body = catSheetHtml(sh);
+    } else if (sh.type === 'newcat') {
+      body = newCatHtml(sh);
+    } else if (sh.type === 'whatsnew') {
+      body = whatsNewHtml();
     } else if (sh.type === 'export') {
       body = `<div class="h">نسخة احتياطية</div><div class="small">انسخ النص ده واحفظه (مثلاً في ملاحظات أو رسالة لنفسك).</div><textarea id="exp" readonly>${esc(JSON.stringify(S))}</textarea>
         <div class="row"><button class="btn primary grow" data-act="copy-exp">نسخ</button><button class="btn ghost grow" data-act="close">إغلاق</button></div>`;
@@ -279,14 +363,16 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('year', 'السنة')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات')}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('year', 'السنة')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
-    const keepFocus = document.activeElement && document.activeElement.id; const pos = document.activeElement && document.activeElement.selectionStart;
+    const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
+    const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
-    $('#app').innerHTML = body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
-    if (keepFocus) { const el = document.getElementById(keepFocus); if (el && !ui.sheet) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
+    $('#app').innerHTML = updBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
+    if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
   }
 
   /* ---------- منطق ---------- */
@@ -332,7 +418,7 @@
     } finally { clearTimeout(to); }
   }
   async function aiParse(text) {
-    const out = A.CATS_OUT.map((c) => `${c.id}=${c.name}`).join('، '); const inn = A.CATS_IN.map((c) => `${c.id}=${c.name}`).join('، ');
+    const out = engine.catsOut().map((c) => `${c.id}=${c.name}`).join('، '); const inn = engine.catsIn().map((c) => `${c.id}=${c.name}`).join('، ');
     const system = 'أنت مساعد داخل تطبيق مصاريف مصري. حوّل رسالة المستخدم (بالعامية المصرية) إلى بنود. ' +
       'ردّك JSON فقط بدون أي شرح ولا علامات كود، بالشكل: {"items":[{"amount":رقم,"label":"وصف قصير بالعربي","type":"out" أو "in","category":"معرّف التصنيف","account":"cash" أو "wallet" أو "insta" أو null}]}. ' +
       `تصنيفات المصروف: ${out}. تصنيفات الدخل: ${inn}. الحسابات: cash=نقدي، wallet=محفظة (فودافون كاش وغيرها)، insta=انستا باي. ` +
@@ -341,7 +427,7 @@
     const m = txt.match(/\{[\s\S]*\}/); if (!m) throw new Error('bad json');
     const obj = JSON.parse(m[0]); const arr = Array.isArray(obj.items) ? obj.items : [];
     return arr.map((it) => {
-      const type = it.type === 'in' ? 'in' : 'out'; const pool = (type === 'in' ? A.CATS_IN : A.CATS_OUT).map((c) => c.id);
+      const type = it.type === 'in' ? 'in' : 'out'; const pool = (type === 'in' ? engine.catsIn() : engine.catsOut()).map((c) => c.id);
       return { amount: Math.abs(parseFloat(it.amount)) || 0, label: String(it.label || '').slice(0, 60), type, cat: pool.indexOf(it.category) >= 0 ? it.category : (type === 'in' ? 'in_other' : 'other'), acc: ACC_IDS.indexOf(it.account) >= 0 ? it.account : null };
     }).filter((it) => it.amount > 0);
   }
@@ -366,6 +452,65 @@
     toast(notes.length ? notes.join(' · ') : `اتسجل ${good.length} ${good.length > 1 ? 'عمليات' : 'عملية'}`);
   }
 
+  /* ---------- تعديل العمليات والتصنيفات ---------- */
+  function saveTx() {
+    const sh = ui.sheet; const t = sh.tx; const orig = S.txs.find((x) => x.id === t.id); if (!orig) { ui.sheet = null; render(); return; }
+    const amount = parseFloat(toDigits(t.amount)); if (!(amount > 0)) { toast('اكتب مبلغ صحيح'); return; }
+    const dp = (sh.date || '').split('-').map(Number); const tp = (sh.time || '00:00').split(':').map(Number);
+    const ts = new Date(dp[0], (dp[1] || 1) - 1, dp[2] || 1, tp[0] || 0, tp[1] || 0).getTime(); if (isNaN(ts)) { toast('التاريخ غير صحيح'); return; }
+    if (t.type === 'xfer' && t.acc === t.to) { toast('اختار حسابين مختلفين'); return; }
+    const was = orig.cat; let note = '';
+    orig.amount = amount; orig.ts = ts; orig.type = t.type; orig.acc = t.acc;
+    if (t.type === 'xfer') orig.to = t.to; else { orig.label = (t.label || '').trim(); orig.cat = t.cat; if (was !== orig.cat && orig.label) { engine.learn(orig.label, orig.cat, true); note = `اتعلمت إن "${orig.label}" = ${catOf(orig.cat).name}`; } }
+    save(); ui.sheet = null; render(); toast(note || 'اتحفظ التعديل');
+  }
+  function teSet(el) {
+    const sh = ui.sheet; if (!sh || sh.type !== 'tx') return; const k = el.dataset.te;
+    if (k === 'date') sh.date = el.value; else if (k === 'time') sh.time = el.value; else sh.tx[k] = el.value;
+  }
+  function addWords() {
+    const sh = ui.sheet; const inp = $('#newword'); const list = (inp ? inp.value : '').split(/[\s,،]+/).filter(Boolean); if (!list.length) return;
+    const id = sh.id; let added = 0;
+    applyCat((cfg) => {
+      const cu = cfg.custom.find((x) => x.id === id);
+      list.forEach((w) => {
+        if (cu) { cu.words = cu.words || []; if (cu.words.indexOf(w) < 0) { cu.words.push(w); added++; } return; }
+        cfg.removed[id] = cfg.removed[id] || [];
+        if (cfg.removed[id].indexOf(w) >= 0) { cfg.removed[id] = cfg.removed[id].filter((x) => x !== w); added++; return; }
+        if (!engine.effectiveWords(id).some((x) => x.w === w)) { cfg.extra[id] = cfg.extra[id] || []; cfg.extra[id].push(w); added++; }
+      });
+    });
+    render(); toast(added ? `اتضافت ${added} كلمة` : 'الكلمات دي موجودة بالفعل');
+  }
+  function deleteCategory() {
+    const sh = ui.sheet; const id = sh.id; const c = engine.catOf(id); if (engine.PROTECTED[id]) return;
+    const target = sh.moveTo && sh.moveTo !== id ? sh.moveTo : (c.type === 'in' ? 'in_other' : 'other');
+    S.txs.forEach((t) => { if (t.cat === id) t.cat = target; });
+    delete S.budgets[id];
+    Object.keys(S.learned).forEach((k) => { if (S.learned[k][id] != null) { delete S.learned[k][id]; if (!Object.keys(S.learned[k]).length) delete S.learned[k]; } });
+    applyCat((cfg) => { const i = cfg.custom.findIndex((x) => x.id === id); if (i >= 0) cfg.custom.splice(i, 1); else if (cfg.hidden.indexOf(id) < 0) cfg.hidden.push(id); });
+    ui.sheet = null; render(); toast(`اتحذف التصنيف، والعمليات اتنقلت لـ"${catOf(target).name}"`);
+  }
+  function createCategory() {
+    const sh = ui.sheet; const name = (sh.name || '').trim(); if (!name) { toast('اكتب اسم التصنيف'); return; }
+    const words = (sh.words || '').split(/[\s,،]+/).filter(Boolean);
+    const id = 'c_' + uid();
+    applyCat((cfg) => { cfg.custom.push({ id, name, color: sh.color, type: sh.ctype, words }); });
+    ui.sheet = { type: 'cat', id, filter: '', confirm: false, moveTo: 'other' }; render(); toast('اتضاف التصنيف');
+  }
+  function applyTheme() {
+    const th = S.settings.theme || 'auto'; document.documentElement.setAttribute('data-theme', th);
+    const dark = th === 'dark' || (th === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', dark ? '#1A130D' : '#FFF8F0');
+  }
+  async function checkUpdate() {
+    if (!/^https?:/.test(location.protocol)) return;
+    try {
+      const r = await fetch('changelog.json?_=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json();
+      ui.changelog = j; const up = j.latest && j.latest !== APP_VERSION ? j.latest : ''; if (up !== ui.update || ui.sheet && ui.sheet.type === 'whatsnew') { ui.update = up; render(); }
+    } catch (e) { /* مفيش نت */ }
+  }
+
   /* ---------- أحداث ---------- */
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]'); if (!el) return; const a = el.dataset.act;
@@ -379,9 +524,29 @@
       case 'cancel-draft': ui.draft = null; render(); break;
       case 'save-draft': syncInputs(); saveDraft(); break;
       case 'del-item': ui.draft.items.splice(idx, 1); if (!ui.draft.items.length) ui.draft = null; render(); break;
-      case 'type': { const it = ui.draft.items[idx]; it.type = el.dataset.v; const ok = (it.type === 'in' ? A.CATS_IN : A.CATS_OUT).some((c) => c.id === it.cat); if (!ok) it.cat = it.type === 'in' ? 'in_other' : 'other'; render(); break; }
+      case 'type': { const it = ui.draft.items[idx]; it.type = el.dataset.v; const ok = (it.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === it.cat); if (!ok) it.cat = it.type === 'in' ? 'in_other' : 'other'; render(); break; }
       case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
-      case 'tx': ui.sheet = { type: 'tx', id: el.dataset.id }; render(); break;
+      case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
+      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; render(); break; }
+      case 'tx-save': saveTx(); break;
+      case 'tx-del-ask': ui.sheet.confirm = true; render(); break;
+      case 'tx-del-cancel': ui.sheet.confirm = false; render(); break;
+      case 'tx-del-do': S.txs = S.txs.filter((t) => t.id !== ui.sheet.id); ui.sheet = null; save(); render(); toast('اتحذفت العملية'); break;
+      case 'theme': S.settings.theme = el.dataset.v; save(); applyTheme(); render(); break;
+      case 'whatsnew': S.settings.seenVersion = APP_VERSION; save(); ui.sheet = { type: 'whatsnew' }; render(); checkUpdate(); break;
+      case 'cat-open': ui.sheet = { type: 'cat', id: el.dataset.id, filter: '', confirm: false, moveTo: 'other' }; render(); break;
+      case 'cat-new': ui.sheet = { type: 'newcat', name: '', ctype: 'out', color: SWATCHES[0], words: '' }; render(); break;
+      case 'cat-color': { const id = ui.sheet.id; applyCat((cfg) => { const cu = cfg.custom.find((x) => x.id === id); if (cu) cu.color = el.dataset.c; else cfg.color[id] = el.dataset.c; }); render(); break; }
+      case 'cat-delword': { const id = ui.sheet.id; const w = el.dataset.w; const user = el.dataset.user === '1'; applyCat((cfg) => { const cu = cfg.custom.find((x) => x.id === id); if (cu) cu.words = (cu.words || []).filter((x) => x !== w); else if (user) cfg.extra[id] = (cfg.extra[id] || []).filter((x) => x !== w); else { cfg.removed[id] = cfg.removed[id] || []; if (cfg.removed[id].indexOf(w) < 0) cfg.removed[id].push(w); } }); render(); break; }
+      case 'cat-addword': addWords(); break;
+      case 'cat-reset': { const id = ui.sheet.id; applyCat((cfg) => { delete cfg.rename[id]; delete cfg.color[id]; delete cfg.extra[id]; delete cfg.removed[id]; }); render(); toast('رجّعت الإعدادات الأصلية'); break; }
+      case 'cat-del-ask': ui.sheet.confirm = true; render(); break;
+      case 'cat-del-cancel': ui.sheet.confirm = false; render(); break;
+      case 'cat-del-do': deleteCategory(); break;
+      case 'cat-restore': applyCat((cfg) => { cfg.hidden = cfg.hidden.filter((x) => x !== el.dataset.id); }); render(); break;
+      case 'nc-type': ui.sheet.ctype = el.dataset.v; render(); break;
+      case 'nc-color': ui.sheet.color = el.dataset.c; render(); break;
+      case 'nc-create': createCategory(); break;
       case 'day': ui.sheet = { type: 'day', d: +el.dataset.d }; render(); break;
       case 'close': ui.sheet = null; render(); break;
       case 'del-tx': S.txs = S.txs.filter((t) => t.id !== el.dataset.id); ui.sheet = null; save(); render(); break;
@@ -411,7 +576,7 @@
   });
   function doAsk() { if (!ui.q.trim()) return; answerQuery(ui.q); ui.q = ''; ui.tab = 'assistant'; render(); }
   function doImport() {
-    try { const d = JSON.parse($('#imp').value); if (!d || !Array.isArray(d.txs)) throw new Error('bad'); S = Object.assign(defaults(), d); Object.keys(engine.learned).forEach((k) => delete engine.learned[k]); Object.assign(engine.learned, S.learned); S.learned = engine.learned; save(); ui.sheet = null; render(); toast('تم الاستيراد'); } catch (e) { toast('النص غير صالح'); }
+    try { const d = JSON.parse($('#imp').value); if (!d || !Array.isArray(d.txs)) throw new Error('bad'); S = Object.assign(defaults(), d); normCfg(); engine.setConfig(S.catConfig); Object.keys(engine.learned).forEach((k) => delete engine.learned[k]); Object.assign(engine.learned, S.learned); S.learned = engine.learned; save(); ui.sheet = null; render(); toast('تم الاستيراد'); } catch (e) { toast('النص غير صالح'); }
   }
   function syncInputs() {
     const inp = $('#inp'); if (inp) ui.text = inp.value;
@@ -423,6 +588,9 @@
   }
   document.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.te) { teSet(t); return; }
+    if (t.dataset.nc) { if (ui.sheet && ui.sheet.type === 'newcat') ui.sheet[t.dataset.nc] = t.value; return; }
+    if (t.dataset.ce === 'filter') { if (ui.sheet) { ui.sheet.filter = t.value; const box = document.querySelector('.wordbox'); if (box) box.innerHTML = wordChipsHtml(ui.sheet); } return; }
     if (t.id === 'inp') ui.text = t.value; else if (t.id === 'qinp') ui.q = t.value;
     else if (t.id === 'rtext') { S.settings.remindText = t.value; save(); }
     else if (t.id === 'aikey') { S.settings.aiKey = t.value; save(); }
@@ -431,6 +599,9 @@
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
+    if (t.dataset.te) { teSet(t); return; }
+    if (t.dataset.ce === 'name') { const v = t.value.trim(); if (v && ui.sheet) { const id = ui.sheet.id; applyCat((cfg) => { const cu = cfg.custom.find((x) => x.id === id); if (cu) cu.name = v; else cfg.rename[id] = v; }); render(); } return; }
+    if (t.dataset.ce === 'moveTo') { ui.sheet.moveTo = t.value; return; }
     if (t.dataset.f === 'cat' || t.dataset.f === 'acc') { syncInputs(); render(); }
     else if (t.dataset.txcat) { const tx = S.txs.find((x) => x.id === t.dataset.txcat); if (tx) { const was = tx.cat; tx.cat = t.value; if (was !== tx.cat) { engine.learn(tx.label, tx.cat, true); toast(`اتعلمت إن "${tx.label}" = ${catOf(tx.cat).name}`); } save(); render(); } }
     else if (t.id === 'remind') { S.settings.remind = t.checked; save(); applyReminders(false); }
@@ -490,6 +661,8 @@
     try { const t = await callClaude('رد بكلمة واحدة فقط: تمام', 'اختبار', 20); toast(t ? 'الاتصال شغال ✔' : 'اتصلت لكن مفيش رد'); } catch (e) { toast('فشل الاتصال: ' + (e && e.message ? e.message : '') + '. تأكد من المفتاح والنت.', 5000); }
   }
   async function refreshApp() {
+    if (navigator.onLine === false) { toast('مفيش اتصال بالإنترنت، هفضل على النسخة الحالية.'); return; }
+    toast('جاري التحديث…', 4000);
     try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } } catch (e) { /* ignore */ }
     location.reload();
   }
@@ -515,7 +688,12 @@
   setInterval(checkBanner, 30000);
 
   if (!S.settings.onboarded) ui.sheet = { type: 'onboard' };
+  applyTheme();
   render();
+  checkUpdate();
+  setInterval(checkUpdate, 10 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', () => applyTheme()); }
   applyReminders(false);
   window.__mahfazty = { S: () => S, ui, render, engine, reminderTimes, checkBanner };
 })();

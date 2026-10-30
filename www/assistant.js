@@ -132,26 +132,70 @@
   }
   const isNum = (t) => /^\d+(\.\d+)?$/.test(t);
 
-  /* ---------- الفهرس ---------- */
-  const INDEX = new Map(); // كلمة -> Set(تصنيفات)
-  function addIndex(word, cat) {
-    keyForms(word).forEach((k) => { if (!INDEX.has(k)) INDEX.set(k, new Set()); INDEX.get(k).add(cat); });
-  }
-  Object.keys(DICT_RAW).forEach((cat) => {
-    norm(DICT_RAW[cat]).split(/\s+/).filter((w) => w.length > 1).forEach((w) => addIndex(w, cat));
-  });
+  /* ---------- الكلمات الملتبسة (ثابتة) ---------- */
   const AMBIG = new Map();
   Object.keys(AMBIGUOUS_RAW).forEach((w) => {
     const nw = norm(w);
     keyForms(nw).forEach((k) => AMBIG.set(k, AMBIGUOUS_RAW[w]));
   });
-  const INDEX_KEYS = [...INDEX.keys()];
+  const PROTECTED = { other: 1, in_other: 1 }; // تصنيفات احتياطية لا تُحذف
 
   /* ---------- المحرك ---------- */
   function create(initialLearned) {
     const learned = initialLearned || {}; // { كلمة: { cat: عدد } , 'كلمتين تانيين': {...}, '#label': {...} }
 
-    const known = (w) => keyForms(w).some((f) => INDEX.has(f) || AMBIG.has(f) || learned[f]);
+    /* إعدادات التصنيفات من المستخدم: custom = تصنيفات جديدة، rename/color = تعديل الاسم واللون،
+       hidden = تصنيفات مخفية، extra = كلمات مضافة لتصنيف جاهز، removed = كلمات محذوفة من تصنيف جاهز */
+    let cfg = { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {} };
+    let INDEX = new Map(); let USER = new Map(); let INDEX_KEYS = [];
+    const isHidden = (id) => cfg.hidden.indexOf(id) >= 0;
+    function rebuild() {
+      INDEX = new Map(); USER = new Map();
+      const add = (map, word, cat) => { keyForms(word).forEach((k) => { if (!map.has(k)) map.set(k, new Set()); map.get(k).add(cat); }); };
+      Object.keys(DICT_RAW).forEach((cat) => {
+        if (isHidden(cat)) return; const rem = new Set(cfg.removed[cat] || []);
+        DICT_RAW[cat].split(/\s+/).forEach((raw) => { if (!raw || rem.has(raw)) return; const nw = norm(raw); if (nw.length > 1) add(INDEX, nw, cat); });
+      });
+      Object.keys(cfg.extra).forEach((cat) => { if (!isHidden(cat)) (cfg.extra[cat] || []).forEach((w) => { const nw = norm(w).trim(); if (nw.length > 1) add(USER, nw, cat); }); });
+      cfg.custom.forEach((c) => (c.words || []).forEach((w) => { const nw = norm(w).trim(); if (nw.length > 1) add(USER, nw, c.id); }));
+      INDEX_KEYS = Array.from(INDEX.keys());
+    }
+    function setConfig(c) {
+      cfg = { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {} };
+      if (c) Object.keys(cfg).forEach((k) => { if (c[k] != null) cfg[k] = c[k]; });
+      rebuild();
+    }
+    const decorate = (c, type) => ({ id: c.id, name: cfg.rename[c.id] || c.name, color: cfg.color[c.id] || c.color, type, builtin: !c.custom });
+    function catsOf(type) {
+      const base = (type === 'in' ? CATS_IN : CATS_OUT).filter((c) => !isHidden(c.id));
+      const lastId = type === 'in' ? 'in_other' : 'other';
+      const main = base.filter((c) => c.id !== lastId).map((c) => decorate(c, type));
+      const custom = cfg.custom.filter((c) => c.type === type).map((c) => decorate({ id: c.id, name: c.name, color: c.color, custom: true }, type));
+      const last = base.filter((c) => c.id === lastId).map((c) => decorate(c, type));
+      return main.concat(custom, last);
+    }
+    const catsOut = () => catsOf('out');
+    const catsIn = () => catsOf('in');
+    function catOf(id) {
+      const f = catsOut().concat(catsIn()).find((c) => c.id === id);
+      if (f) return f;
+      const b = CAT_BY_ID[id]; // مخفي أو محذوف: نرجّع الاسم الأصلي عشان العمليات القديمة تفضل مفهومة
+      if (b) return { id: b.id, name: cfg.rename[b.id] || b.name, color: b.color, type: CATS_IN.some((c) => c.id === id) ? 'in' : 'out', builtin: true, hidden: true };
+      const cu = cfg.custom.find((c) => c.id === id); if (cu) return { id: cu.id, name: cu.name, color: cu.color, type: cu.type, builtin: false, hidden: true };
+      return { id: 'other', name: 'أخرى', color: '#7A6A5C', type: 'out', builtin: true };
+    }
+    function effectiveWords(id) {
+      if (CAT_BY_ID[id]) {
+        const rem = new Set(cfg.removed[id] || []);
+        const base = (DICT_RAW[id] || '').split(/\s+/).filter((w) => w && !rem.has(w)).map((w) => ({ w, user: false }));
+        return base.concat((cfg.extra[id] || []).map((w) => ({ w, user: true })));
+      }
+      const c = cfg.custom.find((x) => x.id === id); return c ? (c.words || []).map((w) => ({ w, user: true })) : [];
+    }
+    const catsAll = () => catsOut().concat(catsIn());
+    setConfig(null);
+
+    const known = (w) => keyForms(w).some((f) => INDEX.has(f) || USER.has(f) || AMBIG.has(f) || learned[f]);
 
     function learnedFor(key) { return learned[key] || null; }
 
@@ -171,10 +215,13 @@
         const lc = {};
         forms.forEach((f) => { const l = learnedFor(f); if (l) Object.keys(l).forEach((c) => { lc[c] = Math.max(lc[c] || 0, l[c]); }); });
         Object.keys(lc).forEach((c) => { add(c, Math.min(lc[c], 6) * 1.5); matched = true; });
+        // كلمات أضافها المستخدم لتصنيف: لها الأولوية على القاموس
+        const uc = new Set(); forms.forEach((f) => { if (USER.has(f)) USER.get(f).forEach((c) => uc.add(c)); });
         // قاموس
         let amb = null; const direct = new Set();
-        forms.forEach((f) => { if (AMBIG.has(f)) amb = AMBIG.get(f); if (INDEX.has(f)) INDEX.get(f).forEach((c) => direct.add(c)); });
-        if (amb) { amb.forEach((c, i) => add(c, i === 0 ? 1.5 : 1.2)); matched = true; }
+        if (!uc.size) forms.forEach((f) => { if (AMBIG.has(f)) amb = AMBIG.get(f); if (INDEX.has(f)) INDEX.get(f).forEach((c) => direct.add(c)); });
+        if (uc.size) { uc.forEach((c) => add(c, 4.5)); matched = true; }
+        else if (amb) { amb.forEach((c, i) => add(c, i === 0 ? 1.5 : 1.2)); matched = true; }
         else if (direct.size === 1) { add([...direct][0], 3); matched = true; }
         else if (direct.size > 1) { direct.forEach((c) => add(c, 1.6)); matched = true; }
         // مطابقة تقريبية للكلمات غير المعروفة (أخطاء إملائية)
@@ -192,7 +239,7 @@
 
     function pick(score, ctx, type) {
       const s = Object.assign({}, score);
-      const pool = type === 'in' ? CATS_IN.map((c) => c.id) : CATS_OUT.map((c) => c.id);
+      const pool = (type === 'in' ? catsIn() : catsOut()).map((c) => c.id);
       if (ctx) Object.keys(ctx).forEach((c) => { if (s[c] != null) s[c] += Math.min(ctx[c], 2) * 1.5; });
       let ranked = Object.keys(s).filter((c) => pool.indexOf(c) >= 0 && s[c] > 0).sort((a, b) => s[b] - s[a]);
       if (!ranked.length) return { cat: type === 'in' ? 'in_other' : 'other', conf: 'low', ranked: [] };
@@ -347,7 +394,7 @@
       const inRange = txs.filter((x) => x.ts >= from && x.ts < to && x.type !== 'xfer');
       // تصنيف مذكور؟
       let cat = null;
-      for (const c of CATS_OUT.concat(CATS_IN)) { if (q.indexOf(norm(c.name)) >= 0) { cat = c.id; break; } }
+      for (const c of catsAll()) { if (q.indexOf(norm(c.name)) >= 0) { cat = c.id; break; } }
       if (!cat) {
         const lbl = toks.filter((x) => x.length > 2 && !STOP.has(x) && !/^(كام|صرفت|دخل|قد|اد|ايه|الشهر|الاسبوع|النهارده|امبارح|السنه|ده|دي|اجمالي|مجموع|علي|على|اكتر|متوسط)$/.test(x));
         if (lbl.length) { const s = scoreLabel(lbl.join(' ')); const p = pick(s.score, null, 'out'); if (p.conf !== 'low' || s.score[p.cat] >= 1.5) cat = p.cat === 'other' ? null : p.cat; }
@@ -361,7 +408,7 @@
         const by = {}; inRange.filter((x) => x.type === 'out').forEach((x) => { by[x.cat] = (by[x.cat] || 0) + x.amount; });
         const top = Object.keys(by).sort((a, b) => by[b] - by[a])[0];
         if (!top) return `مفيش مصروفات مسجلة ${scope}.`;
-        return `أكتر حاجة صرفت عليها ${scope} هي ${CAT_BY_ID[top].name}: ${fmt(by[top])} ج.م.`;
+        return `أكتر حاجة صرفت عليها ${scope} هي ${catOf(top).name}: ${fmt(by[top])} ج.م.`;
       }
       if (has(/وفرت|صافي|الصافي/)) {
         const inc = sum(inRange.filter((x) => x.type === 'in')); const out = sum(inRange.filter((x) => x.type === 'out'));
@@ -373,12 +420,12 @@
       }
       const wantIn = has(/دخل|ايراد|قبضت|استلمت|مرتب|راتب/) && !has(/صرفت|مصروف/);
       const list = inRange.filter((x) => x.type === (wantIn ? 'in' : 'out') && (!cat || x.cat === cat));
-      const label = cat ? CAT_BY_ID[cat].name : (wantIn ? 'الدخل' : 'المصروفات');
+      const label = cat ? catOf(cat).name : (wantIn ? 'الدخل' : 'المصروفات');
       if (!list.length) return `مفيش ${wantIn ? 'دخل' : 'مصروفات'} ${cat ? 'في ' + label + ' ' : ''}مسجلة ${scope}.`;
       return `${wantIn ? 'دخلك' : 'صرفت'} ${cat ? 'على ' + label : 'إجمالي'} ${scope}: ${fmt(sum(list))} ج.م (${list.length} عملية).`;
     }
 
-    return { parse, learn, forget, answer, scoreLabel, pick, learned };
+    return { parse, learn, forget, answer, scoreLabel, pick, learned, setConfig, getConfig: () => cfg, catsOut, catsIn, catsAll, catOf, effectiveWords, PROTECTED };
   }
 
   /* ---------- الحسابات ---------- */
