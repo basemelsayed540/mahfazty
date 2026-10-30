@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.9.1';
+  const APP_VERSION = '1.10.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -67,13 +67,19 @@
       <div class="row"><button class="btn primary grow" data-act="banner-open">فتح وتسجيل</button><button class="btn ghost grow" data-act="banner-skip">تخطي</button></div></div>`;
   }
 
+  function updNoteHtml() {
+    if (!S.settings.onboarded || S.settings.seenVersion === APP_VERSION) return '';
+    const cl = ui.changelog && ui.changelog.versions ? ui.changelog.versions.find((v) => v.v === APP_VERSION) : null;
+    return `<div class="card updnote" role="status"><div class="h">اتحدّث التطبيق للنسخة ${esc(APP_VERSION)}</div><div class="small" style="margin:4px 0 8px">${cl ? esc(cl.title) : 'في مميزات جديدة'}</div><div class="row"><button class="btn primary grow" data-act="whatsnew">شوف الجديد</button><button class="btn ghost grow" data-act="upd-dismiss">تمام</button></div></div>`;
+  }
+
   function homeHtml() {
     const b = balances(); const total = b.cash + b.wallet + b.insta;
     const today = S.txs.filter((t) => t.ts >= startOfDay(Date.now()) && t.type !== 'xfer');
     const tin = sumBy(today, 'in'); const tout = sumBy(today, 'out');
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
     const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
-    return `<div class="screen">${bannerHtml()}
+    return `<div class="screen">${bannerHtml()}${updNoteHtml()}
       <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)}</b></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <div class="accs3">
@@ -623,7 +629,8 @@
       case 'gomonth': ui.vm = { y: ui.vy, m: +el.dataset.m }; ui.tab = 'month'; render(); break;
       case 'ask': ui.q = ($('#qinp') || {}).value || ui.q; doAsk(); break;
       case 'forget': engine.forget(el.dataset.k); save(); render(); break;
-      case 'onboard-ok': S.settings.onboarded = true; ui.sheet = null; save(); render(); applyReminders(true); break;
+      case 'upd-dismiss': S.settings.seenVersion = APP_VERSION; save(); render(); break;
+      case 'onboard-ok': S.settings.seenVersion = APP_VERSION; S.settings.onboarded = true; ui.sheet = null; save(); render(); applyReminders(true); break;
       case 'export': ui.sheet = { type: 'export' }; render(); break;
       case 'import': ui.sheet = { type: 'import' }; render(); break;
       case 'copy-exp': { const ta = $('#exp'); ta.select(); try { (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(() => toast('اتنسخ')).catch(() => { document.execCommand('copy'); toast('اتنسخ'); }); } catch (er) { document.execCommand('copy'); toast('اتنسخ'); } break; }
@@ -727,9 +734,17 @@
     try { const t = await callClaude('رد بكلمة واحدة فقط: تمام', 'اختبار', 20); toast(t ? 'الاتصال شغال ✔' : 'اتصلت لكن مفيش رد'); } catch (e) { toast('فشل الاتصال: ' + (e && e.message ? e.message : '') + '. تأكد من المفتاح والنت.', 5000); }
   }
   async function refreshApp() {
-    if (navigator.onLine === false) { toast('مفيش اتصال بالإنترنت، هفضل على النسخة الحالية.'); return; }
-    toast('جاري التحديث…', 4000);
-    try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } } catch (e) { /* ignore */ }
+    if (ui.busyRefresh) return; ui.busyRefresh = true;
+    toast('جاري التحقق من الاتصال…', 6000);
+    let online = false;
+    try {
+      const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
+      const r = await fetch('changelog.json?_=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(tm); online = r.ok;
+    } catch (e) { online = false; }
+    ui.busyRefresh = false;
+    if (!online) { toast('لا يوجد اتصال بالإنترنت. التطبيق شغال على نسخته الحالية وبياناتك محفوظة.', 4500); return; }
+    toast('جاري التحديث…', 3000);
+    try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } } catch (e) { /* ignore */ }
     location.reload();
   }
   (function listenNotif() {

@@ -152,3 +152,5 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .pk i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .pk.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .field.col{flex-direction:column;align-items:stretch;gap:6px}
+
+.updnote{border-color:var(--accent);background:var(--accent-soft)}

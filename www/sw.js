@@ -5,7 +5,7 @@ self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c
 self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', (e) => {
   const req = e.request; if (req.method !== 'GET') return;
-  const u = new URL(req.url); if (u.origin !== location.origin) return;
+  const u = new URL(req.url); if (u.origin !== location.origin) return; if (u.pathname.endsWith('changelog.json')) return; /* دايماً من النت، عشان فحص الاتصال والتحديث يبقى حقيقي */
   e.respondWith(new Promise((resolve) => {
     let done = false;
     const fromCache = () => caches.match(req).then((r) => r || caches.match('index.html'));
