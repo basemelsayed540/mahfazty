@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.8.0';
+  const APP_VERSION = '1.9.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -129,7 +129,7 @@
     const lab = (sh.tx.label || '').trim(); if (!lab) { sh.hint = ''; return; }
     const sc = engine.scoreLabel(lab); const pk = engine.pick(sc.score, null, sh.tx.type);
     sh.tx.cat = pk.cat; sh.hint = pk.conf === 'low' ? 'مش متأكد من التصنيف، اختار الصح وهتعلّم منه.' : 'اتصنّف تلقائي، وتقدر تغيّره.';
-    const sel = document.getElementById('te_cat'); if (sel) { sel.innerHTML = catOptions(sh.tx.type, sh.tx.cat); }
+    const sel = document.getElementById('te_cat'); if (sel) { sel.innerHTML = catPick(sh.tx.type, sh.tx.cat, 'data-act="te-pick" data-k="cat"'); }
     const h = document.getElementById('te_hint'); if (h) { h.textContent = sh.hint; h.className = pk.conf === 'low' ? 'warn' : 'ok'; }
   }
 
@@ -138,6 +138,15 @@
     if (t.type === 'xfer') return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow('x')}<div><div class="t1">تحويل</div><div class="t2">${ACC[t.acc]} ← ${ACC[t.to]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</div></div></div><div style="font-weight:800">${fmt(t.amount)}</div></button>`;
     return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow(t.type === 'in' ? 'in' : 'out')}<div><div class="t1">${esc(t.label || catOf(t.cat).name)}</div><div class="t2">${chip(t.cat)}<span>${ACC[t.acc]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</span></div></div></div><div class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '-'}${fmt(t.amount)}</div></button>`;
   }
+
+  /* أزرار اختيار بدل القوائم المنسدلة */
+  function pickHtml(items, sel, attrs) {
+    return items.map((c) => `<button type="button" class="pk${c.id === sel ? ' on' : ''}" ${attrs} data-v="${c.id}">${c.color ? `<i style="background:${c.color}"></i>` : ''}${esc(c.name)}</button>`).join('');
+  }
+  const catList = (type, sel) => { const l = (type === 'in' ? engine.catsIn() : engine.catsOut()).slice(); if (sel && !l.some((c) => c.id === sel)) l.push(engine.catOf(sel)); return l; };
+  const accList = () => ACC_IDS.map((a) => ({ id: a, name: ACC[a] }));
+  const catPick = (type, sel, attrs) => pickHtml(catList(type, sel), sel, attrs);
+  const accPick = (sel, attrs) => pickHtml(accList(), sel, attrs);
 
   function catOptions(type, sel) {
     const list = (type === 'in' ? engine.catsIn() : engine.catsOut()).slice();
@@ -159,7 +168,7 @@
         : (it.usedContext ? `<div class="ok">فهمتها من سياق كلامك</div>` : '');
       return `<div class="ditem" data-i="${i}">
         <div class="row"><input data-f="amount" inputmode="decimal" aria-label="المبلغ" value="${esc(it.amount)}" style="max-width:110px"><input data-f="label" aria-label="الوصف" value="${esc(it.label)}" placeholder="الوصف"><button class="xbtn" data-act="del-item" data-i="${i}" aria-label="حذف البند">✕</button></div>
-        <div class="row"><select data-f="cat" aria-label="التصنيف">${catOptions(it.type, it.cat)}</select><select data-f="acc" aria-label="الحساب">${accOptions(it.acc)}</select></div>
+        <div class="small">التصنيف</div><div class="pick">${catPick(it.type, it.cat, `data-act="di-pick" data-i="${i}" data-k="cat"`)}</div><div class="small">الحساب</div><div class="pick">${accPick(it.acc, `data-act="di-pick" data-i="${i}" data-k="acc"`)}</div>
         <div class="seg" role="group" aria-label="النوع"><button class="${it.type === 'out' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="out">مصروف</button><button class="${it.type === 'in' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="in">دخل</button></div>
         ${msg}</div>`;
     }).join('');
@@ -311,8 +320,8 @@
     const t = sh.tx; const isX = t.type === 'xfer';
     const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
-      ? `<div class="field"><label for="te_acc">من</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div><div class="field"><label for="te_to">إلى</label><select id="te_to" data-te="to">${accOptions(t.to)}</select></div>`
-      : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field"><label for="te_cat">التصنيف</label><select id="te_cat" data-te="cat">${catOptions(t.type, t.cat)}</select></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div class="field"><label for="te_acc">الحساب</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div>`;
+      ? `<div class="field col"><label>من</label><div class="pick">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col"><label>إلى</label><div class="pick">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
+      : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field col"><label>التصنيف</label><div class="pick" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div class="field col"><label>الحساب</label><div class="pick">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
     const actions = sh.confirm
       ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
       : `<div class="row"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
@@ -333,7 +342,7 @@
     if (prot) del = '<div class="small">ده تصنيف أساسي بيستقبل أي حاجة مش مفهومة، فما ينفعش يتحذف. تقدر تغيّر اسمه ولونه.</div>';
     else if (sh.confirm) {
       const opts = (c.type === 'in' ? engine.catsIn() : engine.catsOut()).filter((x) => x.id !== sh.id).map((x) => `<option value="${x.id}"${x.id === sh.moveTo ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
-      del = `<div class="warn">${used ? `فيه ${used} عملية في التصنيف ده. اختار تنقلها لأنهي تصنيف:` : 'متأكد من الحذف؟'}</div>${used ? `<select data-ce="moveTo" aria-label="انقل العمليات إلى">${opts}</select>` : ''}<div class="row"><button class="btn red grow" data-act="cat-del-do">تأكيد الحذف</button><button class="btn ghost grow" data-act="cat-del-cancel">لا</button></div>`;
+      del = `<div class="warn">${used ? `فيه ${used} عملية في التصنيف ده. اختار تنقلها لأنهي تصنيف:` : 'متأكد من الحذف؟'}</div>${used ? `<div class="pick">${pickHtml((c.type === 'in' ? engine.catsIn() : engine.catsOut()).filter((x) => x.id !== sh.id), sh.moveTo, 'data-act="cat-moveto"')}</div>` : ''}<div class="row"><button class="btn red grow" data-act="cat-del-do">تأكيد الحذف</button><button class="btn ghost grow" data-act="cat-del-cancel">لا</button></div>`;
     } else del = '<button class="btn ghost" style="color:var(--red)" data-act="cat-del-ask">حذف التصنيف</button>';
     return `<div class="h" style="font-size:18px">تعديل التصنيف</div>
       <div class="field"><label for="ce_name">الاسم</label><input id="ce_name" data-ce="name" value="${esc(c.name)}"></div>
@@ -567,6 +576,9 @@
     const idx = +el.dataset.i;
     switch (a) {
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
+      case 'te-pick': { const sh = ui.sheet; sh.tx[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat') { sh.catManual = true; sh.hint = ''; } render(); break; }
+      case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; render(); break; }
+      case 'cat-moveto': ui.sheet.moveTo = el.dataset.v; render(); break;
       case 'hp': ui.hp = el.dataset.v; render(); break;
       case 'hf': ui.hf = el.dataset.v; render(); break;
       case 'ha': ui.ha = el.dataset.v; render(); break;
@@ -637,7 +649,7 @@
     if (ui.draft && ui.draft.items) document.querySelectorAll('.ditem').forEach((box) => {
       const it = ui.draft.items[+box.dataset.i]; if (!it) return;
       it.amount = box.querySelector('[data-f=amount]').value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-      it.label = box.querySelector('[data-f=label]').value; it.cat = box.querySelector('[data-f=cat]').value; it.acc = box.querySelector('[data-f=acc]').value;
+      it.label = box.querySelector('[data-f=label]').value;
     });
   }
   document.addEventListener('input', (e) => {
@@ -657,7 +669,6 @@
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.ce === 'name') { const v = t.value.trim(); if (v && ui.sheet) { const id = ui.sheet.id; applyCat((cfg) => { const cu = cfg.custom.find((x) => x.id === id); if (cu) cu.name = v; else cfg.rename[id] = v; }); render(); } return; }
     if (t.dataset.ce === 'moveTo') { ui.sheet.moveTo = t.value; return; }
-    if (t.dataset.f === 'cat' || t.dataset.f === 'acc') { syncInputs(); render(); }
     else if (t.dataset.txcat) { const tx = S.txs.find((x) => x.id === t.dataset.txcat); if (tx) { const was = tx.cat; tx.cat = t.value; if (was !== tx.cat) { engine.learn(tx.label, tx.cat, true); toast(`اتعلمت إن "${tx.label}" = ${catOf(tx.cat).name}`); } save(); render(); } }
     else if (t.id === 'remind') { S.settings.remind = t.checked; save(); applyReminders(false); }
     else if (t.id === 'every') { S.settings.everyH = +t.value; save(); render(); applyReminders(false); }
