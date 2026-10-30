@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '1.3.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -71,23 +71,21 @@
     const b = balances(); const total = b.cash + b.wallet + b.insta;
     const today = S.txs.filter((t) => t.ts >= startOfDay(Date.now()) && t.type !== 'xfer');
     const tin = sumBy(today, 'in'); const tout = sumBy(today, 'out');
+    const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
     const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
     return `<div class="screen">${bannerHtml()}
       <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
-      <div class="stack">
+      <div class="accs3">
         <button class="acard cash" data-act="acc" data-id="cash" aria-label="نقدي ${fmt(b.cash)}"><span>نقدي</span><b>${fmt(b.cash)}</b></button>
         <button class="acard wallet" data-act="acc" data-id="wallet" aria-label="محفظة ${fmt(b.wallet)}"><span>محفظة</span><b>${fmt(b.wallet)}</b></button>
         <button class="acard insta" data-act="acc" data-id="insta" aria-label="انستا باي ${fmt(b.insta)}"><span>انستا باي</span><b>${fmt(b.insta)}</b></button>
       </div>
+      <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <div class="composer">
-        <label class="small" for="inp">اكتب بكلامك وأنا أفهم وأصنّف</label>
-        <textarea id="inp" rows="2" placeholder="مثال: 50 بنزين و10 زيت">${esc(ui.text)}</textarea>
+        <label class="small" for="inp">أضف مصروف أو دخل</label>
+        <textarea id="inp" rows="2" placeholder="اكتب مصروفك أو دخلك هنا">${esc(ui.text)}</textarea>
         <div class="row between">
-          <div class="chips">
-            <button class="chip" data-act="ex" data-t="50 فطار و300 لحمة">50 فطار و300 لحمة</button>
-            <button class="chip" data-act="ex" data-t="50 بنزين و10 زيت">50 بنزين و10 زيت</button>
-            <button class="chip" data-act="ex" data-t="راتب 8000 انستا">راتب 8000 انستا</button>
-          </div>
+          <span class="small">اكتب المبلغ والوصف (ممكن أكتر من بند) واضغط سجّل. اللون الأخضر دخل والأحمر مصروف.</span>
           <button class="btn primary" data-act="parse" style="flex-shrink:0">سجّل</button>
         </div>
       </div>
@@ -95,7 +93,26 @@
       <div class="card row between"><div><div class="h">النهارده</div><div class="small">دخل ${fmt(tin)} · خرج ${fmt(tout)}</div></div><div class="${tin - tout >= 0 ? 'pos' : 'neg'}" style="font-size:20px">${tin - tout >= 0 ? '+' : '-'}${fmt(Math.abs(tin - tout))}</div></div>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
         ${recent.length ? recent.map(txRow).join('') : '<div class="card small">لسه مفيش عمليات. اكتب أول مصروف فوق.</div>'}
+        ${S.txs.length > 8 ? '<button class="btn ghost" data-act="tab" data-id="history">عرض كل السجل</button>' : ''}
       </div></div>`;
+  }
+
+  function historyHtml() {
+    const f = ui.hf || 'all'; const q = norm1(ui.hq);
+    let arr = S.txs.slice().sort((a, b2) => b2.ts - a.ts);
+    if (f !== 'all') arr = arr.filter((t) => t.type === f);
+    if (ui.ha) arr = arr.filter((t) => t.acc === ui.ha || t.to === ui.ha);
+    if (q) arr = arr.filter((t) => norm1((t.label || '') + ' ' + catOf(t.cat).name).indexOf(q) >= 0 || String(t.amount) === q);
+    const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out');
+    let html = ''; let last = '';
+    arr.slice(0, 300).forEach((t) => { const k = ymd(t.ts); if (k !== last) { last = k; html += `<div class="small" style="padding:6px 4px 0">${esc(dayLabel(t.ts))}</div>`; } html += txRow(t); });
+    const seg = (id, n) => `<button class="${f === id ? 'on' : ''}" data-act="hf" data-v="${id}">${n}</button>`;
+    const accSeg = `<div class="seg" role="group" aria-label="الحساب"><button class="${!ui.ha ? 'on' : ''}" data-act="ha" data-v="">كل الحسابات</button>${ACC_IDS.map((a) => `<button class="${ui.ha === a ? 'on' : ''}" data-act="ha" data-v="${a}">${ACC[a]}</button>`).join('')}</div>`;
+    return `<div class="screen"><div class="h" style="font-size:20px;padding:4px">السجل</div>
+      <input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">
+      <div class="seg" role="group" aria-label="النوع">${seg('all', 'الكل')}${seg('out', 'مصروف')}${seg('in', 'دخل')}${seg('xfer', 'تحويل')}</div>${accSeg}
+      <div class="card row between"><span class="small">${arr.length} عملية</span><span class="small">دخل <b class="pos">${fmt(inc)}</b> · مصروف <b class="neg">${fmt(out)}</b></span></div>
+      ${html || '<div class="card small">مفيش عمليات مطابقة.</div>'}</div>`;
   }
 
   function txRow(t) {
@@ -135,14 +152,14 @@
     const { y, m } = ui.vm; const arr = inMonth(y, m);
     const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out'); const net = inc - out;
     const first = new Date(y, m, 1); const dim = new Date(y, m + 1, 0).getDate(); const offset = (first.getDay() + 1) % 7;
-    const per = {}; arr.filter((t) => t.type === 'out').forEach((t) => { const d = new Date(t.ts).getDate(); per[d] = (per[d] || 0) + t.amount; });
+    const per = {}; const perIn = {}; arr.forEach((t) => { const d = new Date(t.ts).getDate(); if (t.type === 'out') per[d] = (per[d] || 0) + t.amount; else if (t.type === 'in') perIn[d] = (perIn[d] || 0) + t.amount; });
     const max = Math.max(1, ...Object.keys(per).map((k) => per[k]));
     const now = new Date(); const isCur = now.getFullYear() === y && now.getMonth() === m;
     let cells = ''; for (let i = 0; i < offset; i++) cells += '<div class="day z"></div>';
     for (let d = 1; d <= dim; d++) {
       const v = per[d] || 0; const fut = isCur && d > now.getDate();
-      const cls = fut ? 'fut' : v === 0 ? '' : v / max > 0.66 ? 'l3' : v / max > 0.33 ? 'l2' : 'l1';
-      cells += `<button class="day ${cls}" data-act="day" data-d="${d}" aria-label="${d} ${MONTHS[m]} مصروف ${fmt(v)}">${d}</button>`;
+      const vi = perIn[d] || 0; const lv = v / max > 0.66 ? 3 : v / max > 0.33 ? 2 : 1; const cls = fut && !v && !vi ? 'fut' : v && vi ? 'both' : v ? 'o' + lv : vi ? 'inc' : '';
+      cells += `<button class="day ${cls}" data-act="day" data-d="${d}" aria-label="${d} ${MONTHS[m]} مصروف ${fmt(v)} دخل ${fmt(vi)}">${d}</button>`;
     }
     const cats = byCat(arr); const keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
     const bars = keys.length ? keys.map((k) => {
@@ -153,7 +170,7 @@
     return `<div class="screen">
       <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
-      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">خريطة الصرف اليومي</span><span class="small">الغامق = صرف أكتر</span></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">أيام الشهر</span><span class="small">الغامق = صرف أكتر</span></div><div class="legend"><span><i style="background:var(--redf)"></i>مصروف</span><span><i style="background:var(--tealf)"></i>دخل</span><span><i class="bothi"></i>الاتنين</span></div>
         <div class="dow"><span>سبت</span><span>أحد</span><span>اثنين</span><span>ثلاثاء</span><span>أربعاء</span><span>خميس</span><span>جمعة</span></div><div class="days">${cells}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
@@ -363,13 +380,13 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('year', 'السنة')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('history', 'السجل')}${t('year', 'السنة')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
-    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
+    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
     $('#app').innerHTML = updBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
@@ -518,7 +535,8 @@
     const idx = +el.dataset.i;
     switch (a) {
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
-      case 'ex': ui.text = el.dataset.t; render(); break;
+      case 'hf': ui.hf = el.dataset.v; render(); break;
+      case 'ha': ui.ha = el.dataset.v; render(); break;
       case 'exq': ui.q = el.dataset.t; doAsk(); break;
       case 'parse': syncInputs(); submitText(); break;
       case 'cancel-draft': ui.draft = null; render(); break;
@@ -592,6 +610,7 @@
     if (t.dataset.nc) { if (ui.sheet && ui.sheet.type === 'newcat') ui.sheet[t.dataset.nc] = t.value; return; }
     if (t.dataset.ce === 'filter') { if (ui.sheet) { ui.sheet.filter = t.value; const box = document.querySelector('.wordbox'); if (box) box.innerHTML = wordChipsHtml(ui.sheet); } return; }
     if (t.id === 'inp') ui.text = t.value; else if (t.id === 'qinp') ui.q = t.value;
+    else if (t.id === 'hq') { ui.hq = t.value; render(); }
     else if (t.id === 'rtext') { S.settings.remindText = t.value; save(); }
     else if (t.id === 'aikey') { S.settings.aiKey = t.value; save(); }
     else if (t.dataset.bud) { const v = parseFloat(t.value); if (v > 0) S.budgets[t.dataset.bud] = v; else delete S.budgets[t.dataset.bud]; save(); }
