@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.6.0';
+  const APP_VERSION = '1.7.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -92,6 +92,8 @@
   function historyHtml() {
     const f = ui.hf || 'all'; const q = norm1(ui.hq);
     let arr = S.txs.slice().sort((a, b2) => b2.ts - a.ts);
+    const hp = ui.hp || 'all'; const sod = startOfDay(Date.now()); const nowM = new Date(); const som = new Date(nowM.getFullYear(), nowM.getMonth(), 1).getTime();
+    if (hp === 'today') arr = arr.filter((t) => t.ts >= sod); else if (hp === 'yest') arr = arr.filter((t) => t.ts >= sod - DAY && t.ts < sod); else if (hp === 'week') arr = arr.filter((t) => t.ts >= sod - 6 * DAY); else if (hp === 'month') arr = arr.filter((t) => t.ts >= som);
     if (f !== 'all') arr = arr.filter((t) => t.type === f);
     if (ui.ha) arr = arr.filter((t) => t.acc === ui.ha || t.to === ui.ha);
     if (q) arr = arr.filter((t) => norm1((t.label || '') + ' ' + catOf(t.cat).name).indexOf(q) >= 0 || String(t.amount) === q);
@@ -102,6 +104,7 @@
     const accSeg = `<div class="seg" role="group" aria-label="الحساب"><button class="${!ui.ha ? 'on' : ''}" data-act="ha" data-v="">كل الحسابات</button>${ACC_IDS.map((a) => `<button class="${ui.ha === a ? 'on' : ''}" data-act="ha" data-v="${a}">${ACC[a]}</button>`).join('')}</div>`;
     return `<div class="screen"><div class="h" style="font-size:20px;padding:4px">السجل</div>
       <input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">
+      <div class="seg" role="group" aria-label="الفترة">${[['today', 'اليوم'], ['yest', 'أمس'], ['week', 'أسبوع'], ['month', 'شهر'], ['all', 'الكل']].map((x) => `<button class="${hp === x[0] ? 'on' : ''}" data-act="hp" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
       <div class="seg" role="group" aria-label="النوع">${seg('all', 'الكل')}${seg('out', 'مصروف')}${seg('in', 'دخل')}${seg('xfer', 'تحويل')}</div>${accSeg}
       <div class="card row between"><span class="small">${arr.length} عملية</span><span class="small">دخل <b class="pos">${fmt(inc)}</b> · مصروف <b class="neg">${fmt(out)}</b></span></div>
       ${html || '<div class="card small">مفيش عمليات مطابقة.</div>'}</div>`;
@@ -131,8 +134,9 @@
   }
 
   function txRow(t) {
-    if (t.type === 'xfer') return `<button class="tx" data-act="tx" data-id="${t.id}"><div><div class="t1">تحويل</div><div class="t2">${ACC[t.acc]} ← ${ACC[t.to]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</div></div><div style="font-weight:800">${fmt(t.amount)}</div></button>`;
-    return `<button class="tx" data-act="tx" data-id="${t.id}"><div><div class="t1">${esc(t.label || catOf(t.cat).name)}</div><div class="t2">${chip(t.cat)}<span>${ACC[t.acc]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</span></div></div><div class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '-'}${fmt(t.amount)}</div></button>`;
+    const arrow = (k) => `<span class="arr ${k}" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">${k === 'in' ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : k === 'out' ? '<path d="M12 19V5M6 11l6-6 6 6"/>' : '<path d="M5 9h14M15 5l4 4-4 4M19 15H5M9 11l-4 4 4 4"/>'}</svg></span>`;
+    if (t.type === 'xfer') return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow('x')}<div><div class="t1">تحويل</div><div class="t2">${ACC[t.acc]} ← ${ACC[t.to]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</div></div></div><div style="font-weight:800">${fmt(t.amount)}</div></button>`;
+    return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow(t.type === 'in' ? 'in' : 'out')}<div><div class="t1">${esc(t.label || catOf(t.cat).name)}</div><div class="t2">${chip(t.cat)}<span>${ACC[t.acc]} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</span></div></div></div><div class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '-'}${fmt(t.amount)}</div></button>`;
   }
 
   function catOptions(type, sel) {
@@ -563,6 +567,7 @@
     const idx = +el.dataset.i;
     switch (a) {
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
+      case 'hp': ui.hp = el.dataset.v; render(); break;
       case 'hf': ui.hf = el.dataset.v; render(); break;
       case 'ha': ui.ha = el.dataset.v; render(); break;
       case 'exq': ui.q = el.dataset.t; doAsk(); break;

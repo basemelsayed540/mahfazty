@@ -143,3 +143,6 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .tabs button{font-size:12px}
 
 .fab{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));left:max(16px,calc(50% - 244px));z-index:12;width:56px;height:56px;border-radius:50%;border:0;background:var(--accentf);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(42,27,16,.35)}
+
+.arr{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
+.arr.in{background:var(--tealf)}.arr.out{background:var(--redf)}.arr.x{background:var(--purplef)}
