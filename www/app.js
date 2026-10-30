@@ -94,7 +94,6 @@
     const today = S.txs.filter((t) => t.ts >= startOfDay(Date.now()) && t.type !== 'xfer');
     const tin = sumBy(today, 'in'); const tout = sumBy(today, 'out');
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
-    const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
     return `<div class="screen">${bannerHtml()}${updNoteHtml()}
       <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)}</b></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
@@ -102,12 +101,15 @@
       <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
       <div class="card row between"><div><div class="h">النهارده</div><div class="small">دخل ${fmt(tin)} · خرج ${fmt(tout)}</div></div><div class="${tin - tout >= 0 ? 'pos' : 'neg'}" style="font-size:20px">${tin - tout >= 0 ? '+' : '-'}${fmt(Math.abs(tin - tout))}</div></div>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
-        ${recent.length ? recent.map(txRow).join('') : '<div class="card small">لسه مفيش عمليات. اضغط "إدخال" فوق وسجّل أول عملية.</div>'}
-        ${S.txs.length > 8 ? '<button class="btn ghost" data-act="tab" data-id="history">عرض كل السجل</button>' : ''}
+        ${historyBodyHtml()}
       </div></div>`;
   }
 
   function historyHtml() {
+    return `<div class="screen"><div class="h" style="font-size:20px;padding:4px">السجل</div>${historyBodyHtml()}</div>`;
+  }
+
+  function historyBodyHtml() {
     const f = ui.hf || 'all'; const q = norm1(ui.hq);
     let arr = S.txs.slice().sort((a, b2) => b2.ts - a.ts);
     const hp = ui.hp || 'all'; const sod = startOfDay(Date.now()); const nowM = new Date(); const som = new Date(nowM.getFullYear(), nowM.getMonth(), 1).getTime();
@@ -120,12 +122,11 @@
     arr.slice(0, 300).forEach((t) => { const k = ymd(t.ts); if (k !== last) { last = k; html += `<div class="small" style="padding:6px 4px 0">${esc(dayLabel(t.ts))}</div>`; } html += txRow(t); });
     const seg = (id, n) => `<button class="${f === id ? 'on' : ''}" data-act="hf" data-v="${id}">${n}</button>`;
     const accSeg = `<div class="pick" role="group" aria-label="الحساب">${pickHtml([{ id: '', name: 'كل الحسابات' }].concat(accList()), ui.ha || '', 'data-act="ha"')}</div>`;
-    return `<div class="screen"><div class="h" style="font-size:20px;padding:4px">السجل</div>
-      <input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">
+    return `<input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">
       <div class="seg" role="group" aria-label="الفترة">${[['today', 'اليوم'], ['yest', 'أمس'], ['week', 'أسبوع'], ['month', 'شهر'], ['all', 'الكل']].map((x) => `<button class="${hp === x[0] ? 'on' : ''}" data-act="hp" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
       <div class="seg" role="group" aria-label="النوع">${seg('all', 'الكل')}${seg('out', 'مصروف')}${seg('in', 'دخل')}${seg('xfer', 'تحويل')}</div>${accSeg}
       <div class="card row between"><span class="small">${arr.length} عملية</span><span class="small">دخل <b class="pos">${fmt(inc)}</b> · مصروف <b class="neg">${fmt(out)}</b></span></div>
-      ${html || '<div class="card small">مفيش عمليات مطابقة.</div>'}</div>`;
+      ${html || '<div class="card small">' + (S.txs.length ? 'مفيش عمليات مطابقة.' : 'لسه مفيش عمليات. اضغط "إدخال" فوق وسجّل أول عملية.') + '</div>'}`;
   }
 
   function entryModeSeg(mode) {
@@ -504,7 +505,7 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('history', 'السجل')}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
