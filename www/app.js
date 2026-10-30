@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.4.0';
+  const APP_VERSION = '1.5.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -74,7 +74,7 @@
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
     const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
     return `<div class="screen">${bannerHtml()}
-      <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
+      <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)}</b></div>
       <div class="accs3">
         <button class="acard cash" data-act="acc" data-id="cash" aria-label="نقدي ${fmt(b.cash)}"><span>نقدي</span><b>${fmt(b.cash)}</b></button>
         <button class="acard wallet" data-act="acc" data-id="wallet" aria-label="محفظة ${fmt(b.wallet)}"><span>محفظة</span><b>${fmt(b.wallet)}</b></button>
@@ -130,7 +130,7 @@
   function draftHtml() {
     const d = ui.draft; if (!d) return '';
     if (d.kind === 'transfer') {
-      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} ج.م من ${ACC[d.from]} إلى ${ACC[d.to]}</div>
+      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} من ${ACC[d.from]} إلى ${ACC[d.to]}</div>
         <div class="row"><button class="btn primary grow" data-act="save-draft">تأكيد التحويل</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
     }
     const aiNote = d.ai === 'pending' ? '<div class="ok">بسأل Claude عشان أتأكد…</div>' : d.ai === 'done' ? '<div class="ok">Claude ساعدني في الفهم</div>' : d.ai === 'error' ? '<div class="warn">ما قدرتش أوصل لـClaude، اتصنّف محلياً.</div>' : '';
@@ -191,7 +191,7 @@
     const saving = inc ? Math.round((inc - out) / inc * 100) : 0;
     return `<div class="screen">
       <div class="nav"><button data-act="yprev" aria-label="السنة السابقة">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">سنة ${y}</div><div class="small">حساب السنة</div></div><button data-act="ynext" aria-label="السنة التالية">‹</button></div>
-      <div style="background:var(--purplef);color:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:13px;font-weight:600">توفير السنة</div><div style="font-size:36px;font-weight:800;line-height:1.15">${inc - out >= 0 ? '+' : '-'}${fmt(Math.abs(inc - out))} <span style="font-size:16px;font-weight:600">ج.م</span></div><div class="row between" style="font-size:13px;font-weight:700;padding-top:6px"><span>دخل ${fmt(inc)}</span><span>مصروف ${fmt(out)}</span></div></div>
+      <div style="background:var(--purplef);color:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:13px;font-weight:600">توفير السنة</div><div style="font-size:36px;font-weight:800;line-height:1.15">${inc - out >= 0 ? '+' : '-'}${fmt(Math.abs(inc - out))} <span style="font-size:16px;font-weight:600"></span></div><div class="row between" style="font-size:13px;font-weight:700;padding-top:6px"><span>دخل ${fmt(inc)}</span><span>مصروف ${fmt(out)}</span></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="row between"><span class="h">صافي كل شهر</span><span class="small">أخضر = الأفضل · أحمر = الأقل</span></div><div class="mgrid">${tiles}</div></div>
       <div class="tiles2"><div class="stat"><small>متوسط المصروف شهرياً</small><b>${fmt(out / months)}</b></div><div class="stat"><small>نسبة التوفير</small><b style="color:var(--teal)">${saving}%</b></div>
         <div class="stat"><small>أكتر شهر صرفاً</small><b>${maxO ? MONTHS[maxO.m] : '-'}</b></div><div class="stat"><small>عدد العمليات</small><b>${yarr.filter((t) => t.type !== 'xfer').length}</b></div></div>
@@ -211,7 +211,7 @@
     if (top && co) out.push(`أكتر حاجة بتصرف عليها الشهر ده: ${catOf(top).name} (${Math.round(bc[top] / co * 100)}% من مصروفك).`);
     Object.keys(S.budgets).forEach((k) => { const b = S.budgets[k]; if (b > 0 && bc[k]) { const r = bc[k] / b; if (r >= 1) out.push(`تجاوزت ميزانية ${catOf(k).name} (${fmt(bc[k])} من ${fmt(b)}).`); else if (r >= 0.8) out.push(`قربت تخلّص ميزانية ${catOf(k).name}: صرفت ${Math.round(r * 100)}%.`); } });
     const day = now.getDate(); const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    if (co > 0 && day >= 5) out.push(`بمعدلك الحالي هتوصل لحوالي ${fmt(Math.round(co / day * dim))} ج.م مصروف آخر الشهر.`);
+    if (co > 0 && day >= 5) out.push(`بمعدلك الحالي هتوصل لحوالي ${fmt(Math.round(co / day * dim))} مصروف آخر الشهر.`);
     const others = S.txs.filter((t) => t.cat === 'other').length;
     if (others >= 3) out.push(`عندي ${others} عمليات في "أخرى". افتحها وصنّفها وأنا هتعلّم منها.`);
     const kn = Object.keys(S.learned).filter((k) => k[0] !== '#' && k.indexOf(' ') < 0).length;
@@ -299,8 +299,8 @@
       : `<div class="row"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
     return `<div class="h" style="font-size:18px">${sh.isNew ? 'عملية جديدة' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${typeSeg}
       <div class="field"><label for="te_amount">المبلغ</label><input id="te_amount" data-te="amount" inputmode="decimal" value="${esc(t.amount)}"></div>${fields}
-      <div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
-      <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>${actions}`;
+      ${sh.isNew ? '' : `<div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
+      <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>`}${actions}`;
   }
   function wordChipsHtml(sh) {
     const q = norm1(sh.filter); const all = engine.effectiveWords(sh.id); const words = all.filter((x) => !q || norm1(x.w).indexOf(q) >= 0).slice(0, 250);
@@ -352,7 +352,7 @@
         <button class="btn primary big" data-act="onboard-ok">ابدأ</button>`;
     } else if (sh.type === 'acc') {
       const b = balances()[sh.id]; const list = S.txs.filter((t) => t.acc === sh.id || t.to === sh.id).sort((a, c) => c.ts - a.ts).slice(0, 12);
-      body = `<div class="h" style="font-size:18px">${ACC[sh.id]}</div><div style="font-size:30px;font-weight:800">${fmt(b)} ج.م</div>
+      body = `<div class="h" style="font-size:18px">${ACC[sh.id]}</div><div style="font-size:30px;font-weight:800">${fmt(b)}</div>
         <div class="field"><label for="op" style="min-width:110px;font-size:13px;font-weight:600">الرصيد الافتتاحي</label><input id="op" data-open="${sh.id}" inputmode="decimal" value="${S.opening[sh.id] || ''}" placeholder="0"></div>
         <div class="small">لتحويل فلوس بين حساباتك اكتب مثلاً: حولت 500 من انستا للكاش</div>
         ${list.map(txRow).join('') || '<div class="small">مفيش عمليات.</div>'}
@@ -380,7 +380,7 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('history', 'السجل')}${t('year', 'السنة')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('history', 'السجل')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
@@ -475,7 +475,7 @@
     if (sh.isNew) {
       const am = parseFloat(toDigits(t.amount)); if (!(am > 0)) { toast('اكتب مبلغ صحيح'); return; }
       const dq = (sh.date || '').split('-').map(Number); const tq = (sh.time || '00:00').split(':').map(Number);
-      const ts0 = new Date(dq[0], (dq[1] || 1) - 1, dq[2] || 1, tq[0] || 0, tq[1] || 0).getTime(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
+      const ts0 = Date.now(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
       else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, true); }
       S.settings.lastAcc = t.acc; save(); ui.sheet = null; render(); toast('اتسجلت العملية'); return;
