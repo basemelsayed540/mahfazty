@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.7.0';
+  const APP_VERSION = '1.7.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -408,7 +408,7 @@
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
-    $('#app').innerHTML = updBarHtml() + body + (ui.sheet || ui.tab === 'home' ? '' : '<button class="fab" data-act="add-tx" aria-label="إضافة عملية"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>') + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    $('#app').innerHTML = updBarHtml() + body + '') + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
   }
