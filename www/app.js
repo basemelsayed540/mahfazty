@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.7.1';
+  const APP_VERSION = '1.8.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -45,7 +45,7 @@
     const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY);
     if (diff === 0) return 'النهارده'; if (diff === 1) return 'امبارح'; const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
   }
-  function toast(msg, ms) { ui.toast = msg; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { ui.toast = ''; render(); }, ms || 3200); }
+  function toast(msg, ms) { ui.toast = msg; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { ui.toast = ''; const el = document.querySelector('.toast'); if (el) el.remove(); else render(); }, ms || 3200); }
 
   function balances() {
     const b = Object.assign({}, S.opening);
@@ -401,7 +401,7 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('history', 'السجل')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('history', 'السجل')}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
@@ -579,7 +579,7 @@
       case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
       case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, catManual: false, hint: '', tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
       case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type !== 'xfer') autoCat(ui.sheet); if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = ACC_IDS.find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; render(); break; }
-      case 'add-tx': ui.draft = null; ui.sheet = { type: 'entry' }; render(); setTimeout(() => { const i = document.getElementById('inp'); if (i) i.focus(); }, 60); break;
+      case 'add-tx': ui.draft = null; openManual(); render(); setTimeout(() => { const i = document.getElementById('te_amount'); if (i) i.focus(); }, 60); break;
       case 'entry-mode': if (el.dataset.v === 'manual') openManual(); else ui.sheet = { type: 'entry' }; render(); break;
       case 'theme-toggle': { const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
       case 'tx-save': saveTx(); break;
