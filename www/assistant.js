@@ -47,6 +47,26 @@
   const CAT_BY_ID = {};
   CATS_OUT.concat(CATS_IN).forEach((c) => { CAT_BY_ID[c.id] = c; });
 
+  const DEFAULT_ACCOUNTS = [
+    { id: 'cash', name: 'نقدي', kind: 'cash' },
+    { id: 'wallet', name: 'محفظة', kind: 'wallet' },
+    { id: 'insta', name: 'انستا باي', kind: 'insta' },
+  ];
+  const KIND_WORDS = {
+    cash: ['نقدا', 'نقدي', 'كاش', 'cash', 'من جيبي'],
+    wallet: ['محفظتي', 'محفظة', 'فودافون كاش', 'فودافون', 'اورنج كاش', 'اتصالات كاش', 'وي كاش', 'اورنج', 'اتصالات'],
+    insta: ['انستا باي', 'انستاباي', 'انستا', 'instapay'],
+    bank: ['بنك', 'البنك', 'فيزا', 'كارت', 'visa', 'ماستر'],
+  };
+  // مرادفات عشان البنود الفرعية (ماما = امي = والدتي ...)
+  const SYN_GROUPS = [
+    ['ماما', 'امي', 'والدتي', 'والده', 'امه', 'ام', 'مامتي', 'مامي'], ['بابا', 'ابي', 'والدي', 'والد', 'ابوي', 'باباي', 'ابويا'],
+    ['اختي', 'اخت', 'اخواتي'], ['اخويا', 'اخي', 'اخ', 'اخوي', 'اخوات'], ['مراتي', 'زوجتي', 'زوجه', 'مدام'], ['جوزي', 'زوجي'],
+    ['ابني', 'ولدي'], ['بنتي', 'ابنتي'], ['جدتي', 'تيته', 'جده'], ['جدي'], ['عمي'], ['خالي'], ['عمتي'], ['خالتي'],
+    ['عربيه', 'سياره', 'عربيتي', 'سيارتي', 'عربيتنا', 'سيارتنا', 'عربتي'], ['موتوسيكل', 'موتور', 'دراجه', 'موتسيكل', 'موتوسيكلي', 'دراجتي', 'سكوتر', 'بخاريه', 'موتوسيكلات'],
+    ['بيت', 'منزل'], ['بيتي', 'منزلي', 'بيتنا', 'منزلنا', 'شقتي', 'شقتنا'], ['محل', 'دكان', 'المحل'], ['شغل', 'مكتب', 'شركه'],
+  ];
+  const SYN_MAP = new Map(); SYN_GROUPS.forEach((g) => g.forEach((w) => SYN_MAP.set(norm(w), norm(g[0]))));
   const ACCOUNTS = [
     { id: 'cash', name: 'نقدي' },
     { id: 'wallet', name: 'محفظة' },
@@ -146,7 +166,7 @@
 
     /* إعدادات التصنيفات من المستخدم: custom = تصنيفات جديدة، rename/color = تعديل الاسم واللون،
        hidden = تصنيفات مخفية، extra = كلمات مضافة لتصنيف جاهز، removed = كلمات محذوفة من تصنيف جاهز */
-    let cfg = { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {} };
+    let cfg = { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {}, subs: {} };
     let INDEX = new Map(); let USER = new Map(); let INDEX_KEYS = [];
     const isHidden = (id) => cfg.hidden.indexOf(id) >= 0;
     function rebuild() {
@@ -161,7 +181,7 @@
       INDEX_KEYS = Array.from(INDEX.keys());
     }
     function setConfig(c) {
-      cfg = { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {} };
+      cfg = { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {}, subs: {} };
       if (c) Object.keys(cfg).forEach((k) => { if (c[k] != null) cfg[k] = c[k]; });
       rebuild();
     }
@@ -194,6 +214,101 @@
     }
     const catsAll = () => catsOut().concat(catsIn());
     setConfig(null);
+
+    /* ---------- الحسابات (قابلة للتعديل من المستخدم) ---------- */
+    let accts = DEFAULT_ACCOUNTS.map((a) => Object.assign({}, a)); let ACC_ENTRIES = []; let ACC_TOKENS = new Set(); let DIGIT_ENTRIES = [];
+    const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    function rebuildAcc() {
+      const ents = []; const toks = new Set(); DIGIT_ENTRIES = [];
+      accts.forEach((a, i) => {
+        [a.name].concat(a.words || []).map((w) => norm(String(w || '')).trim()).filter((w) => w.length > 1).forEach((w) => {
+          if (/\d/.test(w)) { const ph = 'accq' + String.fromCharCode(97 + (i % 26)) + 'x'; DIGIT_ENTRIES.push({ text: w, ph }); ents.push({ text: ph, ids: [a.id], kind: null }); toks.add(ph); }
+          ents.push({ text: w, ids: [a.id], kind: null }); w.split(' ').forEach((x) => toks.add(x));
+        });
+      });
+      Object.keys(KIND_WORDS).forEach((k) => KIND_WORDS[k].forEach((w) => { const nw = norm(w).trim(); ents.push({ text: nw, ids: null, kind: k }); nw.split(' ').forEach((x) => toks.add(x)); }));
+      ents.sort((x, y) => y.text.length - x.text.length); DIGIT_ENTRIES.sort((x, y) => y.text.length - x.text.length);
+      ACC_ENTRIES = ents; ACC_TOKENS = toks;
+    }
+    function setAccounts(list) {
+      accts = (list && list.length ? list : DEFAULT_ACCOUNTS).map((a) => ({ id: a.id, name: a.name || '', kind: a.kind || 'cash', words: a.words || [] }));
+      rebuildAcc();
+    }
+    const kindId = (k) => { const a = accts.find((x) => x.kind === k); return a ? a.id : null; };
+    function protectAccDigits(str) {
+      let r = str;
+      DIGIT_ENTRIES.forEach((d) => { r = r.replace(new RegExp('(^| )' + reEsc(d.text).replace(/ /g, '\\s*') + '(?= |$)', 'g'), '$1' + d.ph); });
+      return r;
+    }
+    function accountsIn(str) {
+      let s = ' ' + str + ' '; const found = [];
+      ACC_ENTRIES.forEach((e) => {
+        let i = s.indexOf(e.text);
+        while (i >= 0) {
+          let ids;
+          if (e.ids) ids = e.ids;
+          else {
+            const c = accts.filter((a) => a.kind === e.kind);
+            if (c.length <= 1) ids = c.map((a) => a.id);
+            else {
+              const nar = c.filter((a) => [a.name].concat(a.words || []).some((w) => norm(String(w)).indexOf(e.text) >= 0));
+              if (nar.length === 1) ids = [nar[0].id];
+              else {
+                const kt = new Set(); (KIND_WORDS[e.kind] || []).forEach((w) => norm(w).split(' ').forEach((x) => kt.add(x)));
+                const dist = (a) => [a.name].concat(a.words || []).reduce((r, w) => r.concat(norm(String(w)).split(' ')), []).filter((x) => x && !kt.has(x) && !isNum(x));
+                const hit = c.filter((a) => dist(a).some((x) => str.indexOf(x) >= 0));
+                if (hit.length === 1) ids = [hit[0].id];
+                else if (!hit.length) { const plain = c.filter((a) => !dist(a).length); ids = plain.length === 1 ? [plain[0].id] : []; } else ids = [];
+              }
+            }
+          }
+          if (ids.length === 1) found.push({ i, id: ids[0] });
+          s = s.slice(0, i) + '\u0001'.repeat(e.text.length) + s.slice(i + e.text.length);
+          i = s.indexOf(e.text);
+        }
+      });
+      return found.sort((a, b) => a.i - b.i).map((x) => x.id);
+    }
+    rebuildAcc();
+
+    /* ---------- البنود الفرعية داخل التصنيفات ---------- */
+    const canon = (t) => { let x = t; if (x.length > 3 && x.startsWith('ال')) x = x.slice(2); return SYN_MAP.get(x) || x; };
+    const subToks = (str) => norm(String(str || '')).split(/\s+/).filter((t) => t && t.length > 1 && !STOP.has(t) && !isNum(t)).map(canon);
+    function subEntries(cat) {
+      return (cfg.subs[cat] || []).map((sb) => { const set = new Set(subToks(sb.name)); (sb.words || []).forEach((w) => subToks(w).forEach((t) => set.add(t))); return { sub: sb, toks: set }; });
+    }
+    function bestSub(label, cat) {
+      const ents = subEntries(cat); if (!ents.length) return null;
+      const lt = new Set(subToks(label)); if (!lt.size) return null;
+      const cnt = new Map(); ents.forEach((e) => e.toks.forEach((t) => cnt.set(t, (cnt.get(t) || 0) + 1)));
+      const scored = ents.map((e) => { let sc = 0; e.toks.forEach((t) => { if (lt.has(t)) sc += 1 / cnt.get(t); }); return { sub: e.sub, sc }; }).sort((a, b) => b.sc - a.sc);
+      const top = scored[0]; const second = scored[1] ? scored[1].sc : 0;
+      return top.sc >= 0.99 && top.sc - second >= 0.5 ? top.sub : null;
+    }
+    function matchSub(label, cat, type, lowConf) {
+      const sb = bestSub(label, cat); if (sb) return { cat, sub: sb.id };
+      if (lowConf || cat === 'other' || cat === 'in_other') {
+        let best = null;
+        catsOf(type).forEach((c) => { const x = bestSub(label, c.id); if (!x || best === 'amb') return; best = best ? 'amb' : { cat: c.id, sub: x.id }; });
+        if (best && best !== 'amb') return best;
+      }
+      return null;
+    }
+    const subsOf = (cat) => (cfg.subs[cat] || []).slice();
+    const subName = (cat, id) => { const x = (cfg.subs[cat] || []).find((y) => y.id === id); return x ? x.name : ''; };
+    // يتعلم كلمات جديدة للبند من وصف كتبه المستخدم واختار له البند يدوياً
+    function learnSub(label, cat, subId) {
+      const list = cfg.subs[cat] || []; const sb = list.find((x) => x.id === subId); if (!sb) return [];
+      const taken = new Set(); list.forEach((x) => { subToks(x.name).forEach((t) => taken.add(t)); (x.words || []).forEach((w) => subToks(w).forEach((t) => taken.add(t))); });
+      const added = [];
+      contentTokens(label).forEach((t) => {
+        const c = canon(t.startsWith('ال') && t.length > 3 ? t.slice(2) : t);
+        if (taken.has(c) || keyForms(t).some((f) => (INDEX.has(f) && INDEX.get(f).has(cat)) || (USER.has(f) && USER.get(f).has(cat)))) return;
+        if (t.length < 3 || ACC_TOKENS.has(t)) return;
+        sb.words = sb.words || []; if (sb.words.indexOf(t) < 0) { sb.words.push(t); added.push(t); taken.add(c); }
+      });
+      return added;
+    }
 
     const known = (w) => keyForms(w).some((f) => INDEX.has(f) || USER.has(f) || AMBIG.has(f) || learned[f]);
 
@@ -277,7 +392,7 @@
 
     /* ---------- تحليل رسالة كاملة ---------- */
     function parse(text) {
-      let t = norm(text).replace(/(\d)([^\d\s.])/g, '$1 $2').replace(/([^\d\s.])(\d)/g, '$1 $2').replace(/\.(?!\d)/g, ' ').replace(/\s+/g, ' ').trim();
+      let t = protectAccDigits(norm(text)).replace(/(\d)([^\d\s.])/g, '$1 $2').replace(/([^\d\s.])(\d)/g, '$1 $2').replace(/\.(?!\d)/g, ' ').replace(/\s+/g, ' ').trim();
       if (!t) return { kind: 'empty', items: [] };
       let tokens = t.split(' ');
       // فصل حرف الواو الملتصق (وزيت -> و زيت)
@@ -296,11 +411,11 @@
       const accIn = (s) => accountsIn(s);
       if (/(^| )(حولت|سحبت|ايدعت|ودعت|حوّلت|ايداع|سحب|حول)( |$)/.test(joined) && hasNum) {
         const amt = parseFloat(tokens.find(isNum));
-        const mFrom = joined.match(/من ([^ ]+(?: باي| كاش)?)/); const mTo = joined.match(/(?:^| )(?:لل|ل|الي|الى|علي|ع) ?([^ ]+(?: باي| كاش)?)/);
+        const mFrom = joined.match(/من ([^ ]+(?: [^ ]+){0,2})/); const mTo = joined.match(/(?:^| )(?:لل|ل|الي|الى|علي|ع) ?([^ ]+(?: [^ ]+){0,2})/);
         let from = mFrom ? accIn(mFrom[1])[0] : null; let to = mTo ? accIn(mTo[1])[0] : null;
         const all = accIn(joined);
-        if (/(^| )(سحبت|سحب)( |$)/.test(joined) && !to) { from = from || all[0] || 'insta'; to = 'cash'; }
-        if (/(^| )(ايدعت|ودعت|ايداع)( |$)/.test(joined) && !from) { to = to || all[0] || 'insta'; from = 'cash'; }
+        if (/(^| )(سحبت|سحب)( |$)/.test(joined) && !to) { from = from || all[0] || kindId('insta') || (accts[1] && accts[1].id); to = kindId('cash') || (accts[0] && accts[0].id); }
+        if (/(^| )(ايدعت|ودعت|ايداع)( |$)/.test(joined) && !from) { to = to || all[0] || kindId('insta') || (accts[1] && accts[1].id); from = kindId('cash') || (accts[0] && accts[0].id); }
         if (!from && all.length === 2) { from = all[0]; to = all[1]; }
         if (from && to && from !== to && amt > 0) return { kind: 'transfer', amount: amt, from, to, dateOffset };
       }
@@ -345,7 +460,7 @@
         if (tokens[ti + 1] === 'الف' || tokens[ti + 1] === 'الاف') { amount *= 1000; }
         const raw = labels[k];
         const acc = accountsIn(raw.join(' '))[0] || (messageAccs.length === 1 ? messageAccs[0] : null);
-        const labelToks = raw.filter((x) => !STOP.has(x) && !CURRENCY.has(x) && x !== 'الف' && x !== 'الاف' && !ACC_WORDS.has(x) && !INCOME_VERBS.has(x) && !/^(نقدا|نقدي|كاش|انستا|انستاباي|instapay|باي|فودافون|محفظه|محفظتي)$/.test(x));
+        const labelToks = raw.filter((x) => !STOP.has(x) && !CURRENCY.has(x) && x !== 'الف' && x !== 'الاف' && !ACC_TOKENS.has(x) && !INCOME_VERBS.has(x) && !/^(نقدا|نقدي|كاش|انستا|انستاباي|instapay|باي|فودافون|محفظه|محفظتي)$/.test(x));
         const label = labelToks.join(' ').trim();
         const incomeHit = msgIncome || labelToks.some((x) => INCOME_WORDS.indexOf(x) >= 0 && ['راتب', 'مرتب', 'ماهيه', 'مكافاه', 'بونص', 'ارباح', 'عيديه', 'ايراد', 'ايرادات', 'دخل'].indexOf(x) >= 0);
         const type = incomeHit ? 'in' : 'out';
@@ -358,9 +473,11 @@
         const ctx = {};
         strong.forEach((c, j) => { if (c && j !== i) ctx[c] = (ctx[c] || 0) + 1; });
         const p = pick(it._sc.score, ctx, it.type);
-        it.cat = p.cat; it.conf = p.conf; it.candidates = p.ranked;
+        it.cat = p.cat; it.conf = p.conf; it.candidates = p.ranked; it.sub = '';
         // السياق حسم كلمة ملتبسة؟
         it.usedContext = !!(Object.keys(ctx).length && p.ranked.length && !!ctx[p.cat]);
+        const sm = matchSub(it.label, it.cat, it.type, p.conf === 'low');
+        if (sm) { it.sub = sm.sub; if (sm.cat !== it.cat) { it.cat = sm.cat; it.usedContext = false; } if (it.conf === 'low') it.conf = 'mid'; }
         delete it._sc;
       });
       return { kind: 'entry', items, dateOffset };
@@ -399,10 +516,12 @@
         const lbl = toks.filter((x) => x.length > 2 && !STOP.has(x) && !/^(كام|صرفت|دخل|قد|اد|ايه|الشهر|الاسبوع|النهارده|امبارح|السنه|ده|دي|اجمالي|مجموع|علي|على|اكتر|متوسط)$/.test(x));
         if (lbl.length) { const s = scoreLabel(lbl.join(' ')); const p = pick(s.score, null, 'out'); if (p.conf !== 'low' || s.score[p.cat] >= 1.5) cat = p.cat === 'other' ? null : p.cat; }
       }
+      let subId = null;
+      { const sm = cat ? matchSub(q, cat, 'out', false) : matchSub(q, 'other', 'out', true); if (sm) { if (!cat) cat = sm.cat; subId = sm.sub; } }
       const sum = (arr) => arr.reduce((a, b) => a + b.amount, 0);
       if (has(/رصيد|معايا|فاضل/) && accountBalances) {
-        const tot = accountBalances.cash + accountBalances.wallet + accountBalances.insta;
-        return `رصيدك الكلي ${fmt(tot)} ج.م: نقدي ${fmt(accountBalances.cash)}، محفظة ${fmt(accountBalances.wallet)}، انستا باي ${fmt(accountBalances.insta)}.`;
+        const tot = accts.reduce((a, x) => a + (accountBalances[x.id] || 0), 0);
+        return `رصيدك الكلي ${fmt(tot)}: ${accts.map((x) => `${x.name} ${fmt(accountBalances[x.id] || 0)}`).join('، ')}.`;
       }
       if (has(/اكتر|اعلي|اغلي/)) {
         const by = {}; inRange.filter((x) => x.type === 'out').forEach((x) => { by[x.cat] = (by[x.cat] || 0) + x.amount; });
@@ -419,30 +538,14 @@
         return `متوسط مصروفك اليومي ${scope} حوالي ${fmt(sum(out) / days)} ج.م.`;
       }
       const wantIn = has(/دخل|ايراد|قبضت|استلمت|مرتب|راتب/) && !has(/صرفت|مصروف/);
-      const list = inRange.filter((x) => x.type === (wantIn ? 'in' : 'out') && (!cat || x.cat === cat));
-      const label = cat ? catOf(cat).name : (wantIn ? 'الدخل' : 'المصروفات');
+      const list = inRange.filter((x) => x.type === (wantIn ? 'in' : 'out') && (!cat || x.cat === cat) && (!subId || x.sub === subId));
+      const label = cat ? catOf(cat).name + (subId ? ' (' + subName(cat, subId) + ')' : '') : (wantIn ? 'الدخل' : 'المصروفات');
       if (!list.length) return `مفيش ${wantIn ? 'دخل' : 'مصروفات'} ${cat ? 'في ' + label + ' ' : ''}مسجلة ${scope}.`;
       return `${wantIn ? 'دخلك' : 'صرفت'} ${cat ? 'على ' + label : 'إجمالي'} ${scope}: ${fmt(sum(list))} ج.م (${list.length} عملية).`;
     }
 
-    return { parse, learn, forget, answer, scoreLabel, pick, learned, setConfig, getConfig: () => cfg, catsOut, catsIn, catsAll, catOf, effectiveWords, PROTECTED };
+    return { parse, learn, forget, answer, scoreLabel, pick, learned, setConfig, getConfig: () => cfg, catsOut, catsIn, catsAll, catOf, effectiveWords, PROTECTED, setAccounts, accountsIn, subsOf, subName, matchSub, learnSub };
   }
 
-  /* ---------- الحسابات ---------- */
-  const ACC_WORDS = new Set(['انستا', 'انستاباي', 'instapay', 'محفظه', 'فودافون', 'كاش', 'نقدي', 'نقدا', 'باي', 'اورنج', 'محفظتي']);
-  function accountsIn(s) {
-    const out = [];
-    const re = /(فودافون كاش|فودافون|اورنج كاش|اتصالات كاش|وي كاش|محفظتي|محفظه|انستا ?باي|انستا|instapay|نقدا|نقدي|كاش|cash|من جيبي)/g;
-    let m;
-    while ((m = re.exec(s))) {
-      const w = m[1];
-      let id = 'cash';
-      if (/فودافون|اورنج|اتصالات|وي كاش|محفظ/.test(w)) id = 'wallet';
-      else if (/انستا|instapay/.test(w)) id = 'insta';
-      out.push(id);
-    }
-    return out;
-  }
-
-  return { create, norm, CATS_OUT, CATS_IN, CAT_BY_ID, ACCOUNTS };
+  return { create, norm, CATS_OUT, CATS_IN, CAT_BY_ID, ACCOUNTS, DEFAULT_ACCOUNTS };
 });
