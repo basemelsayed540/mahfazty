@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.9.0';
+  const APP_VERSION = '1.9.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -75,12 +75,12 @@
     const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
     return `<div class="screen">${bannerHtml()}
       <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)}</b></div>
+      <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <div class="accs3">
         <button class="acard cash" data-act="acc" data-id="cash" aria-label="نقدي ${fmt(b.cash)}"><span>نقدي</span><b>${fmt(b.cash)}</b></button>
         <button class="acard wallet" data-act="acc" data-id="wallet" aria-label="محفظة ${fmt(b.wallet)}"><span>محفظة</span><b>${fmt(b.wallet)}</b></button>
         <button class="acard insta" data-act="acc" data-id="insta" aria-label="انستا باي ${fmt(b.insta)}"><span>انستا باي</span><b>${fmt(b.insta)}</b></button>
       </div>
-      <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
       <div class="card row between"><div><div class="h">النهارده</div><div class="small">دخل ${fmt(tin)} · خرج ${fmt(tout)}</div></div><div class="${tin - tout >= 0 ? 'pos' : 'neg'}" style="font-size:20px">${tin - tout >= 0 ? '+' : '-'}${fmt(Math.abs(tin - tout))}</div></div>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
