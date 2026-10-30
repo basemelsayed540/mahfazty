@@ -45,7 +45,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.12.0';
+  const APP_VERSION = '1.12.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -923,7 +923,7 @@
   }
   setInterval(checkBanner, 30000);
 
-  if (!S.settings.onboarded) ui.sheet = { type: 'onboard' };
+  if (!S.settings.onboarded) { S.settings.onboarded = true; S.settings.seenVersion = APP_VERSION; save(); } // من غير نافذة ترحيب. الأرصدة الافتتاحية من الإعدادات
   applyTheme();
   render();
   checkUpdate();
