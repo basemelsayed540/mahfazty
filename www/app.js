@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.5.0';
+  const APP_VERSION = '1.6.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -81,18 +81,10 @@
         <button class="acard insta" data-act="acc" data-id="insta" aria-label="انستا باي ${fmt(b.insta)}"><span>انستا باي</span><b>${fmt(b.insta)}</b></button>
       </div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
-      <div class="composer">
-        <label class="small" for="inp">أضف مصروف أو دخل</label>
-        <textarea id="inp" rows="2" placeholder="اكتب مصروفك أو دخلك هنا">${esc(ui.text)}</textarea>
-        <div class="row between">
-          <span class="small">اكتب المبلغ والوصف (ممكن أكتر من بند) واضغط سجّل. اللون الأخضر دخل والأحمر مصروف.</span>
-          <button class="btn primary" data-act="parse" style="flex-shrink:0">سجّل</button>
-        </div>
-      </div>
-      ${draftHtml()}
+      <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
       <div class="card row between"><div><div class="h">النهارده</div><div class="small">دخل ${fmt(tin)} · خرج ${fmt(tout)}</div></div><div class="${tin - tout >= 0 ? 'pos' : 'neg'}" style="font-size:20px">${tin - tout >= 0 ? '+' : '-'}${fmt(Math.abs(tin - tout))}</div></div>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
-        ${recent.length ? recent.map(txRow).join('') : '<div class="card small">لسه مفيش عمليات. اكتب أول مصروف فوق.</div>'}
+        ${recent.length ? recent.map(txRow).join('') : '<div class="card small">لسه مفيش عمليات. اضغط "إدخال" فوق وسجّل أول عملية.</div>'}
         ${S.txs.length > 8 ? '<button class="btn ghost" data-act="tab" data-id="history">عرض كل السجل</button>' : ''}
       </div></div>`;
   }
@@ -113,6 +105,29 @@
       <div class="seg" role="group" aria-label="النوع">${seg('all', 'الكل')}${seg('out', 'مصروف')}${seg('in', 'دخل')}${seg('xfer', 'تحويل')}</div>${accSeg}
       <div class="card row between"><span class="small">${arr.length} عملية</span><span class="small">دخل <b class="pos">${fmt(inc)}</b> · مصروف <b class="neg">${fmt(out)}</b></span></div>
       ${html || '<div class="card small">مفيش عمليات مطابقة.</div>'}</div>`;
+  }
+
+  function entryModeSeg(mode) {
+    return `<div class="seg" role="group" aria-label="طريقة الإدخال"><button class="${mode === 'smart' ? 'on' : ''}" data-act="entry-mode" data-v="smart">كتابة بكلامك</button><button class="${mode === 'manual' ? 'on' : ''}" data-act="entry-mode" data-v="manual">يدوي</button></div>`;
+  }
+  function entryHtml() {
+    return `<div class="h" style="font-size:18px">إدخال مصروف أو دخل</div>${entryModeSeg('smart')}
+      <div class="composer"><label class="small" for="inp">اكتب المبلغ والوصف، وأنا أصنّف تلقائي</label>
+        <textarea id="inp" data-keepfocus="1" rows="2" placeholder="اكتب مصروفك أو دخلك هنا">${esc(ui.text)}</textarea>
+        <div class="row between"><span class="small">ممكن أكتر من بند في نفس الكتابة.</span><button class="btn primary" data-act="parse" style="flex-shrink:0">سجّل</button></div></div>
+      ${draftHtml()}<button class="btn ghost" data-act="close">إغلاق</button>`;
+  }
+  function openManual() {
+    const n = Date.now();
+    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: 'other', acc: S.settings.lastAcc || 'cash', to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
+  }
+  function autoCat(sh) {
+    if (!sh || sh.catManual || sh.tx.type === 'xfer') return;
+    const lab = (sh.tx.label || '').trim(); if (!lab) { sh.hint = ''; return; }
+    const sc = engine.scoreLabel(lab); const pk = engine.pick(sc.score, null, sh.tx.type);
+    sh.tx.cat = pk.cat; sh.hint = pk.conf === 'low' ? 'مش متأكد من التصنيف، اختار الصح وهتعلّم منه.' : 'اتصنّف تلقائي، وتقدر تغيّره.';
+    const sel = document.getElementById('te_cat'); if (sel) { sel.innerHTML = catOptions(sh.tx.type, sh.tx.cat); }
+    const h = document.getElementById('te_hint'); if (h) { h.textContent = sh.hint; h.className = pk.conf === 'low' ? 'warn' : 'ok'; }
   }
 
   function txRow(t) {
@@ -293,11 +308,11 @@
     const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
       ? `<div class="field"><label for="te_acc">من</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div><div class="field"><label for="te_to">إلى</label><select id="te_to" data-te="to">${accOptions(t.to)}</select></div>`
-      : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field"><label for="te_cat">التصنيف</label><select id="te_cat" data-te="cat">${catOptions(t.type, t.cat)}</select></div><div class="field"><label for="te_acc">الحساب</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div>`;
+      : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field"><label for="te_cat">التصنيف</label><select id="te_cat" data-te="cat">${catOptions(t.type, t.cat)}</select></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div class="field"><label for="te_acc">الحساب</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div>`;
     const actions = sh.confirm
       ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
       : `<div class="row"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
-    return `<div class="h" style="font-size:18px">${sh.isNew ? 'عملية جديدة' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${typeSeg}
+    return `<div class="h" style="font-size:18px">${sh.isNew ? 'إدخال يدوي' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${sh.isNew ? entryModeSeg('manual') : ''}${typeSeg}
       <div class="field"><label for="te_amount">المبلغ</label><input id="te_amount" data-te="amount" inputmode="decimal" value="${esc(t.amount)}"></div>${fields}
       ${sh.isNew ? '' : `<div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
       <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>`}${actions}`;
@@ -362,6 +377,8 @@
     } else if (sh.type === 'day') {
       const { y, m } = ui.vm; const arr = inMonth(y, m).filter((t) => new Date(t.ts).getDate() === sh.d).sort((a, c) => c.ts - a.ts);
       body = `<div class="h" style="font-size:18px">${sh.d} ${MONTHS[m]}</div>${arr.map(txRow).join('') || '<div class="small">مفيش عمليات في اليوم ده.</div>'}<button class="btn primary" data-act="close">تم</button>`;
+    } else if (sh.type === 'entry') {
+      body = entryHtml();
     } else if (sh.type === 'cat') {
       body = catSheetHtml(sh);
     } else if (sh.type === 'newcat') {
@@ -387,7 +404,7 @@
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
-    $('#app').innerHTML = updBarHtml() + body + (ui.sheet ? '' : '<button class="fab" data-act="add-tx" aria-label="إضافة عملية"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>') + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    $('#app').innerHTML = updBarHtml() + body + (ui.sheet || ui.tab === 'home' ? '' : '<button class="fab" data-act="add-tx" aria-label="إضافة عملية"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>') + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
   }
@@ -396,7 +413,7 @@
   function submitText() {
     const text = ui.text.trim(); if (!text) { toast('اكتب مصروفك الأول، مثلاً: 50 بنزين و10 زيت'); return; }
     const r = engine.parse(text);
-    if (r.kind === 'query') { answerQuery(text); ui.text = ''; ui.tab = 'assistant'; render(); return; }
+    if (r.kind === 'query') { answerQuery(text); ui.text = ''; ui.sheet = null; ui.tab = 'assistant'; render(); return; }
     if (r.kind === 'transfer') { ui.draft = { kind: 'transfer', amount: r.amount, from: r.from, to: r.to, dateOffset: r.dateOffset }; render(); return; }
     const useAI = !!(S.settings.aiOn && S.settings.aiKey && (!r.items.length || r.items.some((it) => it.conf === 'low')));
     if (!r.items.length && !useAI) { toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف، مثلاً: 50 فطار'); return; }
@@ -465,7 +482,7 @@
       if (corrected && it.label) notes.push(`اتعلمت إن "${it.label.trim()}" = ${catOf(it.cat).name}`);
     });
     if (good.length) S.settings.lastAcc = good[good.length - 1].acc;
-    ui.draft = null; ui.text = ''; S.settings.lastReminder = Date.now(); save();
+    ui.draft = null; ui.text = ''; if (ui.sheet && ui.sheet.type === 'entry') ui.sheet = null; S.settings.lastReminder = Date.now(); save();
     toast(notes.length ? notes.join(' · ') : `اتسجل ${good.length} ${good.length > 1 ? 'عمليات' : 'عملية'}`);
   }
 
@@ -477,7 +494,7 @@
       const dq = (sh.date || '').split('-').map(Number); const tq = (sh.time || '00:00').split(':').map(Number);
       const ts0 = Date.now(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
-      else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, true); }
+      else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, !!sh.catManual); }
       S.settings.lastAcc = t.acc; save(); ui.sheet = null; render(); toast('اتسجلت العملية'); return;
     }
     const orig = S.txs.find((x) => x.id === t.id); if (!orig) { ui.sheet = null; render(); return; }
@@ -493,6 +510,8 @@
   function teSet(el) {
     const sh = ui.sheet; if (!sh || sh.type !== 'tx') return; const k = el.dataset.te;
     if (k === 'date') sh.date = el.value; else if (k === 'time') sh.time = el.value; else sh.tx[k] = el.value;
+    if (k === 'cat') { sh.catManual = true; sh.hint = ''; const h = document.getElementById('te_hint'); if (h) h.textContent = ''; }
+    if (k === 'label') autoCat(sh);
   }
   function addWords() {
     const sh = ui.sheet; const inp = $('#newword'); const list = (inp ? inp.value : '').split(/[\s,،]+/).filter(Boolean); if (!list.length) return;
@@ -553,9 +572,10 @@
       case 'del-item': ui.draft.items.splice(idx, 1); if (!ui.draft.items.length) ui.draft = null; render(); break;
       case 'type': { const it = ui.draft.items[idx]; it.type = el.dataset.v; const ok = (it.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === it.cat); if (!ok) it.cat = it.type === 'in' ? 'in_other' : 'other'; render(); break; }
       case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
-      case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
-      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = ACC_IDS.find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; render(); break; }
-      case 'add-tx': { const n = new Date(); ui.sheet = { type: 'tx', isNew: true, id: null, tx: { type: 'out', amount: '', label: '', cat: 'other', acc: S.settings.lastAcc || 'cash', to: '' }, date: ymd(n.getTime()), time: hhmm(n.getTime()), confirm: false }; render(); break; }
+      case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, catManual: false, hint: '', tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
+      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type !== 'xfer') autoCat(ui.sheet); if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = ACC_IDS.find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; render(); break; }
+      case 'add-tx': ui.draft = null; ui.sheet = { type: 'entry' }; render(); setTimeout(() => { const i = document.getElementById('inp'); if (i) i.focus(); }, 60); break;
+      case 'entry-mode': if (el.dataset.v === 'manual') openManual(); else ui.sheet = { type: 'entry' }; render(); break;
       case 'theme-toggle': { const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
       case 'tx-save': saveTx(); break;
       case 'tx-del-ask': ui.sheet.confirm = true; render(); break;
