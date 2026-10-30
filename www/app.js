@@ -29,7 +29,7 @@
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
 
-  const APP_VERSION = '1.3.0';
+  const APP_VERSION = '1.4.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -74,7 +74,7 @@
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
     const recent = S.txs.slice().sort((a, b2) => b2.ts - a.ts).slice(0, 8);
     return `<div class="screen">${bannerHtml()}
-      <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
+      <div class="total"><span class="row" style="gap:6px"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><span class="small" style="font-size:14px">إجمالي رصيدك</span></span><b>${fmt(total)} <span class="small" style="font-size:15px">ج.م</span></b></div>
       <div class="accs3">
         <button class="acard cash" data-act="acc" data-id="cash" aria-label="نقدي ${fmt(b.cash)}"><span>نقدي</span><b>${fmt(b.cash)}</b></button>
         <button class="acard wallet" data-act="acc" data-id="wallet" aria-label="محفظة ${fmt(b.wallet)}"><span>محفظة</span><b>${fmt(b.wallet)}</b></button>
@@ -290,14 +290,14 @@
 
   function txEditHtml(sh) {
     const t = sh.tx; const isX = t.type === 'xfer';
-    const typeSeg = isX ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button></div>`;
+    const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
       ? `<div class="field"><label for="te_acc">من</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div><div class="field"><label for="te_to">إلى</label><select id="te_to" data-te="to">${accOptions(t.to)}</select></div>`
       : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field"><label for="te_cat">التصنيف</label><select id="te_cat" data-te="cat">${catOptions(t.type, t.cat)}</select></div><div class="field"><label for="te_acc">الحساب</label><select id="te_acc" data-te="acc">${accOptions(t.acc)}</select></div>`;
     const actions = sh.confirm
       ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
-      : `<div class="row"><button class="btn primary grow" data-act="tx-save">حفظ التعديل</button><button class="btn red" data-act="tx-del-ask">حذف</button><button class="btn ghost" data-act="close">إغلاق</button></div>`;
-    return `<div class="h" style="font-size:18px">${isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${typeSeg}
+      : `<div class="row"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
+    return `<div class="h" style="font-size:18px">${sh.isNew ? 'عملية جديدة' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${typeSeg}
       <div class="field"><label for="te_amount">المبلغ</label><input id="te_amount" data-te="amount" inputmode="decimal" value="${esc(t.amount)}"></div>${fields}
       <div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
       <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>${actions}`;
@@ -387,7 +387,7 @@
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
-    $('#app').innerHTML = updBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    $('#app').innerHTML = updBarHtml() + body + (ui.sheet ? '' : '<button class="fab" data-act="add-tx" aria-label="إضافة عملية"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>') + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
   }
@@ -471,7 +471,16 @@
 
   /* ---------- تعديل العمليات والتصنيفات ---------- */
   function saveTx() {
-    const sh = ui.sheet; const t = sh.tx; const orig = S.txs.find((x) => x.id === t.id); if (!orig) { ui.sheet = null; render(); return; }
+    const sh = ui.sheet; const t = sh.tx;
+    if (sh.isNew) {
+      const am = parseFloat(toDigits(t.amount)); if (!(am > 0)) { toast('اكتب مبلغ صحيح'); return; }
+      const dq = (sh.date || '').split('-').map(Number); const tq = (sh.time || '00:00').split(':').map(Number);
+      const ts0 = new Date(dq[0], (dq[1] || 1) - 1, dq[2] || 1, tq[0] || 0, tq[1] || 0).getTime(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
+      if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
+      else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, true); }
+      S.settings.lastAcc = t.acc; save(); ui.sheet = null; render(); toast('اتسجلت العملية'); return;
+    }
+    const orig = S.txs.find((x) => x.id === t.id); if (!orig) { ui.sheet = null; render(); return; }
     const amount = parseFloat(toDigits(t.amount)); if (!(amount > 0)) { toast('اكتب مبلغ صحيح'); return; }
     const dp = (sh.date || '').split('-').map(Number); const tp = (sh.time || '00:00').split(':').map(Number);
     const ts = new Date(dp[0], (dp[1] || 1) - 1, dp[2] || 1, tp[0] || 0, tp[1] || 0).getTime(); if (isNaN(ts)) { toast('التاريخ غير صحيح'); return; }
@@ -545,7 +554,9 @@
       case 'type': { const it = ui.draft.items[idx]; it.type = el.dataset.v; const ok = (it.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === it.cat); if (!ok) it.cat = it.type === 'in' ? 'in_other' : 'other'; render(); break; }
       case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
       case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
-      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; render(); break; }
+      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = ACC_IDS.find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; render(); break; }
+      case 'add-tx': { const n = new Date(); ui.sheet = { type: 'tx', isNew: true, id: null, tx: { type: 'out', amount: '', label: '', cat: 'other', acc: S.settings.lastAcc || 'cash', to: '' }, date: ymd(n.getTime()), time: hhmm(n.getTime()), confirm: false }; render(); break; }
+      case 'theme-toggle': { const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
       case 'tx-save': saveTx(); break;
       case 'tx-del-ask': ui.sheet.confirm = true; render(); break;
       case 'tx-del-cancel': ui.sheet.confirm = false; render(); break;
