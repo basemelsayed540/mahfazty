@@ -1,6 +1,6 @@
 /* محفظتي - تحديث تلقائي: يجيب النسخة الجديدة من النت أولاً، ولو مفيش نت يفتح من النسخة المحفوظة */
 const CACHE = 'mahfazty-cache';
-const CORE = ['./', 'index.html', 'style.css', 'assistant.js', 'app.js'];
+const CORE = ['./', 'index.html', 'style.css', 'assistant.js', 'payments.js', 'app.js'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', (e) => {

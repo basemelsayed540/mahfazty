@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   const A = window.Assistant;
+  const PE = window.PayEngine;
   const KEY = 'mahfazty_v1';
   const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const KIND_COLOR = { cash: '#0B6E6E', wallet: '#B84A0B', insta: '#4A3AA8', bank: '#2F6FB5' };
@@ -11,7 +12,7 @@
 
   /* ---------- التخزين ---------- */
   function defaults() {
-    return { v: 1, accounts: DEF_ACCS.map((a) => Object.assign({}, a, { words: [] })), txs: [], learned: {}, budgets: {},
+    return { v: 1, accounts: DEF_ACCS.map((a) => Object.assign({}, a, { words: [] })), txs: [], learned: {}, budgets: {}, payIgnore: {},
       settings: { remind: true, remindMode: 'interval', everyH: 2, startT: '09:00', endT: '22:00', times: ['09:00', '13:00', '18:00', '21:00'], remindText: 'صرفت حاجة في آخر ساعتين؟ سجّلها دلوقتي', lastAcc: 'cash', onboarded: false, lastReminder: 0, lastBanner: 0, aiOn: false, aiKey: '', aiModel: 'claude-haiku-5-5', theme: 'auto', seenVersion: '' },
       catConfig: { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {}, subs: {} } };
   }
@@ -25,7 +26,7 @@
   let S = load();
   const normCfg = () => { S.catConfig = Object.assign({ custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {}, subs: {} }, S.catConfig || {}); if (!S.catConfig.subs) S.catConfig.subs = {}; };
   normCfg();
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } schedulePayNotifs(); }
   const engine = A.create(S.learned);
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
@@ -45,7 +46,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.12.1';
+  const APP_VERSION = '1.13.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -92,7 +93,7 @@
   function homeHtml() {
     const b = balances(); const total = S.accounts.reduce((x, a) => x + (b[a.id] || 0), 0);
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
-    return `<div class="screen">${bannerHtml()}${updNoteHtml()}
+    return `<div class="screen">${bannerHtml()}${updNoteHtml()}${payAlertHtml()}
       <div class="total"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <div class="accs3">${S.accounts.map((a) => `<button class="acard" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${fmt(b[a.id] || 0)}"><span>${esc(a.name)}</span><b>${fmt(b[a.id] || 0)}</b></button>`).join('')}</div>
@@ -124,6 +125,63 @@
       <div class="seg" role="group" aria-label="النوع">${seg('all', 'الكل')}${seg('out', 'مصروف')}${seg('in', 'دخل')}${seg('xfer', 'تحويل')}</div>${accSeg}
       <div class="card row between"><span class="small">${arr.length} عملية</span><span class="small">دخل <b class="pos">${fmt(inc)}</b> · مصروف <b class="neg">${fmt(out)}</b></span></div>
       ${html || '<div class="card small">' + (S.txs.length ? 'مفيش عمليات مطابقة.' : 'لسه مفيش عمليات. اضغط "إدخال" فوق وسجّل أول عملية.') + '</div>'}`;
+  }
+
+  /* ---------- التذكير الذكي: مدفوعات ودخل متكرر ---------- */
+  const PAY_ID0 = 20000; // أرقام إشعارات المدفوعات (تذكير المصاريف العادي أقل من كده)
+  const payCompute = () => { try { return PE.compute(S.txs, Date.now(), norm1, S.payIgnore || {}); } catch (e) { return []; } };
+  const payData = () => ui._pay || payCompute();
+  const payUrgentList = () => payData().filter(PE.isUrgent);
+  function payDateText(ts) { const d = new Date(ts); return `${PE.WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; }
+  function payCard(l) {
+    const urgent = PE.isUrgent(l); const isIn = l.type === 'in';
+    const ico = isIn ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>';
+    const arrow = `<span class="arr ${isIn ? 'in' : 'out'}" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">${ico}</svg></span>`;
+    const k = esc(l.key);
+    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(l.label || catOf(l.cat).name)}</div><div class="small">${PE.kindText(l.pattern)} · من ${l.count} مرات</div></div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${isIn ? '+' : '-'}${fmt(l.avg)}</div><div class="small">تقريباً</div></div></div>
+      <div class="row between"><span class="duebadge${urgent ? ' hot' : ''}">${PE.dueText(l.daysLeft)}</span><span class="small">${payDateText(l.due)}</span></div>
+      <div class="row"><button class="btn ${isIn ? 'teal' : 'primary'} grow" data-act="pay-do" data-k="${k}">${isIn ? 'سجّل القبض' : 'سجّل الدفع'}</button><button class="btn ghost" data-act="pay-ignore" data-k="${k}">تجاهل</button></div></div>`;
+  }
+  function payHtml() {
+    const all = payData(); const live = all.filter((l) => !l.ignored); const ign = all.filter((l) => l.ignored);
+    const urgent = live.filter(PE.isUrgent); const later = live.filter((l) => !PE.isUrgent(l));
+    const sec = (t, arr) => (arr.length ? `<div style="display:flex;flex-direction:column;gap:8px"><div class="h" style="padding:0 4px">${t}</div>${arr.map(payCard).join('')}</div>` : '');
+    const empty = live.length ? '' : '<div class="card small" style="line-height:1.9">لسه مفيش مدفوعات أو دخل متكرر. سجّل نفس العملية (زي الإيجار أو الراتب أو اشتراك) في شهرين ورا بعض، وأنا هكتشفها لوحدي وأنبّهك قبل الموعد بـ' + PE.SOON + ' أيام وفي يومه.</div>';
+    const ignHtml = ign.length ? `<details class="card"><summary>المتجاهَلة (${ign.length})</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${ign.map((l) => `<div class="row between"><span class="small" style="font-size:13px">${esc(l.label || catOf(l.cat).name)} · ${PE.kindText(l.pattern)}</span><button class="btn ghost" data-act="pay-restore" data-k="${esc(l.key)}">رجّعه</button></div>`).join('')}</div></details>` : '';
+    const note = cap('LocalNotifications') ? '' : '<div class="small" style="padding:0 4px">إشعارات النظام بتشتغل في تطبيق الأندرويد. هنا التنبيه بيظهر جوه التطبيق وهو مفتوح.</div>';
+    return `<div class="screen"><div><div class="h" style="font-size:20px;padding:4px">التذكير</div><div class="small" style="padding:0 4px">بكتشف مدفوعاتك ودخلك المتكرر من عملياتك، وبنبّهك قبل الموعد بـ${PE.SOON} أيام وفي يومه.</div></div>${note}${sec('محتاج انتباه', urgent)}${sec('جاي قريب', later)}${empty}${ignHtml}</div>`;
+  }
+  function payAlertHtml() {
+    const u = payUrgentList(); if (!u.length) return '';
+    const names = u.slice(0, 2).map((l) => `${esc(l.label || catOf(l.cat).name)} (${PE.dueText(l.daysLeft)})`).join(' · ') + (u.length > 2 ? ` و${u.length - 2} كمان` : '');
+    return `<button class="card payalert" data-act="tab" data-id="pay"><span class="dot blink" aria-hidden="true"></span><span class="grow"><b>${u.length > 1 ? 'عندك ' + u.length + ' مواعيد قريبة' : 'عندك موعد قريب'}</b><span class="small" style="display:block">${names}</span></span><span aria-hidden="true">‹</span></button>`;
+  }
+  function payDo(key) {
+    const l = payCompute().find((x) => x.key === key); if (!l) return;
+    ui.draft = null; openManual();
+    const sh = ui.sheet; sh.catManual = true; sh.subManual = true;
+    sh.tx = { type: l.type, amount: String(l.avg), label: l.label, cat: l.cat, sub: l.sub, acc: validAcc(l.acc), to: '' };
+    render();
+  }
+  // إشعارات النظام: قبل الموعد بـ3 أيام (10 ص) وفي يوم الموعد (9 ص). بتتجدد مع كل حفظ.
+  function schedulePayNotifs() {
+    clearTimeout(schedulePayNotifs._t);
+    schedulePayNotifs._t = setTimeout(async () => {
+      const LN = cap('LocalNotifications'); if (!LN) return;
+      try {
+        const perm = await LN.requestPermissions(); if (perm.display !== 'granted') return;
+        await LN.createChannel({ id: 'payments', name: 'تذكير المدفوعات', description: 'تنبيه قبل مواعيد المدفوعات والدخل المتكرر', importance: 5, visibility: 1, vibration: true, lights: true });
+        const pend = await LN.getPending(); const old = pend.notifications.filter((n) => n.id >= PAY_ID0); if (old.length) await LN.cancel({ notifications: old });
+        const now = Date.now(); const list = [];
+        payCompute().filter((l) => !l.ignored).forEach((l, i) => {
+          const name = l.label || catOf(l.cat).name; const isIn = l.type === 'in'; const amt = fmt(l.avg);
+          const mk = (n, at, body) => { if (at > now + 6e4) list.push({ id: PAY_ID0 + i * 2 + n, title: isIn ? 'محفظتي · دخل قريب' : 'محفظتي · تذكير دفع', body, channelId: 'payments', schedule: { at: new Date(at), allowWhileIdle: true }, extra: { pay: 1 } }); };
+          mk(0, PE.addDays(l.due, -PE.SOON) + 10 * 36e5, `بعد ${PE.SOON} أيام (${payDateText(l.due)}): ${name} · حوالي ${amt}`);
+          mk(1, l.due + 9 * 36e5, `النهارده: ${name} · حوالي ${amt}`);
+        });
+        if (list.length) await LN.schedule({ notifications: list });
+      } catch (e) { /* ignore */ }
+    }, 2500);
   }
 
   function entryModeSeg(mode) {
@@ -502,13 +560,14 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('pay', 'التذكير' + (payUrgentList().length ? '<i class="dot blink"></i>' : ''))}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
-    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
+    ui._pay = payCompute();
+    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'pay' ? payHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
     $('#app').innerHTML = updBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
@@ -710,6 +769,9 @@
     const idx = +el.dataset.i;
     switch (a) {
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
+      case 'pay-do': payDo(el.dataset.k); break;
+      case 'pay-ignore': S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('اتجاهلته. تقدر ترجّعه من آخر صفحة التذكير'); break;
+      case 'pay-restore': S.payIgnore = S.payIgnore || {}; delete S.payIgnore[el.dataset.k]; save(); render(); break;
       case 'te-pick': { const sh = ui.sheet; const k = el.dataset.k; sh.tx[k] = el.dataset.v; if (k === 'cat') { sh.catManual = true; sh.hint = ''; if (sh.tx.sub && !engine.subsOf(sh.tx.cat).some((x) => x.id === sh.tx.sub)) sh.tx.sub = ''; } if (k === 'sub') sh.subManual = true; render(); break; }
       case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat' && it.sub && !engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; render(); break; }
       case 'acc-edit': ui.sheet = { type: 'accedit', id: el.dataset.id, confirm: false, moveTo: '' }; render(); break;
@@ -869,7 +931,7 @@
       if (perm.display !== 'granted') { if (announce) toast('لازم تسمح بالإشعارات من إعدادات التليفون'); return; }
       await LN.createChannel({ id: 'reminders', name: 'تذكير المصاريف', description: 'تذكير تسجيل المصاريف', importance: 4, visibility: 1, vibration: true });
       await LN.registerActionTypes({ types: [{ id: 'REMINDER', actions: [{ id: 'open', title: 'فتح' }, { id: 'skip', title: 'تخطي' }] }] });
-      const pend = await LN.getPending(); if (pend.notifications.length) await LN.cancel({ notifications: pend.notifications });
+      const pend = await LN.getPending(); const mine = pend.notifications.filter((n) => n.id < PAY_ID0); if (mine.length) await LN.cancel({ notifications: mine });
       if (!S.settings.remind) { if (announce) toast('التذكير متوقف'); return; }
       const list = reminderTimes();
       await LN.schedule({ notifications: list.map((t) => ({ id: 1000 + toMin(t), title: 'محفظتي', body: S.settings.remindText, channelId: 'reminders', actionTypeId: 'REMINDER', schedule: { on: { hour: Math.floor(toMin(t) / 60), minute: toMin(t) % 60 }, allowWhileIdle: true } })) });
@@ -905,6 +967,7 @@
   (function listenNotif() {
     const LN = cap('LocalNotifications'); if (!LN) return;
     LN.addListener('localNotificationActionPerformed', (ev) => {
+      const ex = ev.notification && ev.notification.extra; if (ex && ex.pay) { ui.tab = 'pay'; render(); window.scrollTo(0, 0); return; }
       if (ev.actionId === 'skip') { const App = cap('App'); if (App && App.minimizeApp) App.minimizeApp(); return; }
       ui.tab = 'home'; render(); setTimeout(() => { const i = $('#inp'); if (i) i.focus(); }, 150);
     });
@@ -928,7 +991,7 @@
   render();
   checkUpdate();
   setInterval(checkUpdate, 10 * 60 * 1000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkUpdate(); schedulePayNotifs(); if (!ui.sheet && !ui.draft) render(); } });
   if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', () => applyTheme()); }
   applyReminders(false);
   window.__mahfazty = { S: () => S, ui, render, engine, reminderTimes, checkBanner };
