@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   const A = window.Assistant;
+  const PE = window.PayEngine;
   const KEY = 'mahfazty_v1';
   const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const KIND_COLOR = { cash: '#0B6E6E', wallet: '#B84A0B', insta: '#4A3AA8', bank: '#2F6FB5' };
@@ -11,7 +12,7 @@
 
   /* ---------- التخزين ---------- */
   function defaults() {
-    return { v: 1, recurring: [], recNid: 0, noRecur: {}, accounts: DEF_ACCS.map((a) => Object.assign({}, a, { words: [] })), txs: [], learned: {}, budgets: {},
+    return { v: 1, recurring: [], recNid: 0, noRecur: {}, payIgnore: {}, accounts: DEF_ACCS.map((a) => Object.assign({}, a, { words: [] })), txs: [], learned: {}, budgets: {},
       settings: { askRecur: 'always', recurTime: '09:00', remind: true, remindMode: 'interval', everyH: 2, startT: '09:00', endT: '22:00', times: ['09:00', '13:00', '18:00', '21:00'], remindText: 'صرفت حاجة في آخر ساعتين؟ سجّلها دلوقتي', lastAcc: 'cash', onboarded: false, lastReminder: 0, lastBanner: 0, aiOn: false, aiKey: '', aiModel: 'claude-haiku-5-5', theme: 'auto', seenVersion: '' },
       catConfig: { custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {}, subs: {} } };
   }
@@ -25,7 +26,8 @@
   let S = load();
   const normCfg = () => { S.catConfig = Object.assign({ custom: [], rename: {}, color: {}, hidden: [], extra: {}, removed: {}, subs: {} }, S.catConfig || {}); if (!S.catConfig.subs) S.catConfig.subs = {}; };
   normCfg();
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
+  let autoCache = null; // نتيجة اكتشاف التكرار التلقائي، بتتجدد مع كل حفظ ومع بداية كل يوم
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } autoCache = null; schedulePayNotifs(); }
   const engine = A.create(S.learned);
   engine.setConfig(S.catConfig);
   function applyCat(fn) { fn(S.catConfig); engine.setConfig(S.catConfig); save(); }
@@ -45,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.13.0';
+  const APP_VERSION = '1.14.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -92,7 +94,7 @@
   function homeHtml() {
     const b = balances(); const total = S.accounts.reduce((x, a) => x + (b[a.id] || 0), 0);
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
-    return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}
+    return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}${payAlertHtml()}
       <div class="total"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <div class="accs3">${S.accounts.map((a) => `<button class="acard" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${fmt(b[a.id] || 0)}"><span>${esc(a.name)}</span><b>${fmt(b[a.id] || 0)}</b></button>`).join('')}</div>
@@ -505,13 +507,14 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('pay', 'التذكير' + (payUrgentList().length ? '<i class="dot blink"></i>' : ''))}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function render() {
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
-    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
+    ui._items = payItems();
+    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'pay' ? payHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
     $('#app').innerHTML = updBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
@@ -834,6 +837,104 @@
     } catch (e) { /* ignore */ }
   }
 
+  /* ---------- تبويب التذكير: دفعات مؤكدة + مكتشفة تلقائياً من عملياتك ---------- */
+  // أرقام الإشعارات: تذكير المصاريف أقل من 20000، المكتشف تلقائياً من 20000 لـ99999، الدفعات المؤكدة من 100000
+  const PAY_ID0 = 20000;
+  const payStrip = (v) => norm1(v).replace(/[0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function payAuto() {
+    const d = startOfDay(Date.now());
+    if (!autoCache || autoCache.d !== d) { let v = []; try { v = PE.compute(S.txs, Date.now(), norm1, S.payIgnore || {}); } catch (e) { v = []; } autoCache = { d, v }; }
+    return autoCache.v;
+  }
+  // هل فيه دفعة مؤكدة (من سؤال التكرار) بتغطي العنصر المكتشف؟ عشان ما يتعرضش مرتين
+  function autoCovered(l) {
+    const ll = payStrip(l.label);
+    return S.recurring.some((r) => r.type === l.type && ((ll && payStrip(r.label) === ll) || (l.sub && r.sub === l.sub && r.cat === l.cat) || (!ll && !payStrip(r.label) && r.cat === l.cat && (r.sub || '') === (l.sub || ''))));
+  }
+  // لو جاوبت "مرة واحدة" على عملية، ما نكتشفهاش تلقائياً إلا لو اتكررت 3 مرات أو أكتر (دليل قوي)
+  function autoBlocked(l) {
+    if (l.count >= 3) return false;
+    const want = payStrip(l.label) || (l.cat + '|' + (l.sub || ''));
+    return Object.keys(S.noRecur || {}).some((k) => payStrip(k) === want);
+  }
+  function payItems() {
+    const today = startOfDay(Date.now()); const out = [];
+    S.recurring.forEach((r) => { out.push({ src: 'rec', id: r.id, type: r.type, label: r.label, cat: r.cat, avg: r.amount, due: r.next, daysLeft: Math.round((startOfDay(r.next) - today) / DAY), kind: `${everyName(r.every)} · يوم ${r.day}`, ignored: false }); });
+    payAuto().forEach((l) => { if (autoCovered(l) || autoBlocked(l)) return; out.push({ src: 'auto', key: l.key, type: l.type, label: l.label, cat: l.cat, sub: l.sub, acc: l.acc, avg: l.avg, due: l.due, daysLeft: l.daysLeft, kind: PE.kindText(l.pattern), count: l.count, pattern: l.pattern, ignored: l.ignored }); });
+    out.sort((a, b) => a.due - b.due);
+    return out;
+  }
+  const payList = () => ui._items || payItems();
+  const payUrgent = (it) => !it.ignored && it.daysLeft <= PE.SOON;
+  const payUrgentList = () => payList().filter(payUrgent);
+  const payDateText = (ts) => { const d = new Date(ts); return `${PE.WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+  function payCard(it) {
+    const urgent = payUrgent(it); const isIn = it.type === 'in'; const rec = it.src === 'rec';
+    const ico = isIn ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>';
+    const arrow = `<span class="arr ${isIn ? 'in' : 'out'}" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">${ico}</svg></span>`;
+    const nm = it.label || catOf(it.cat).name; const k = esc(rec ? it.id : it.key);
+    const doAct = rec ? `data-act="rc-pay" data-id="${k}"` : `data-act="pay-do" data-k="${k}"`;
+    const canPin = !rec && (it.pattern.kind === 'month' || it.pattern.kind === 'year');
+    const more = rec
+      ? `<button class="btn ghost" data-act="rc-skip" data-id="${k}">تخطي</button><button class="btn ghost" data-act="rc-open" data-id="${k}">تعديل</button>`
+      : `${canPin ? `<button class="btn ghost" data-act="pay-pin" data-k="${k}">ثبّت</button>` : ''}<button class="btn ghost" data-act="pay-ignore" data-k="${k}">تجاهل</button>`;
+    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}</div></div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${isIn ? '+' : '-'}${fmt(it.avg)}</div><div class="small">${rec ? '&nbsp;' : 'تقريباً'}</div></div></div>
+      <div class="row between"><span class="duebadge${urgent ? ' hot' : ''}">${PE.dueText(it.daysLeft)}</span><span class="small">${payDateText(it.due)}</span><span class="srcbadge">${rec ? 'مؤكّد' : 'اكتشفته من عملياتك'}</span></div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn ${isIn ? 'teal' : 'primary'} grow" ${doAct}>${isIn ? 'سجّل الاستلام' : 'سجّل الدفع'}</button>${more}</div></div>`;
+  }
+  function payHtml() {
+    const all = payList(); const live = all.filter((l) => !l.ignored); const ign = all.filter((l) => l.ignored);
+    const urgent = live.filter(payUrgent); const later = live.filter((l) => !payUrgent(l));
+    const sec = (t, arr) => (arr.length ? `<div style="display:flex;flex-direction:column;gap:8px"><div class="h" style="padding:0 4px">${t}</div>${arr.map(payCard).join('')}</div>` : '');
+    const empty = live.length ? '' : '<div class="card small" style="line-height:1.9">لسه مفيش مدفوعات أو دخل متكرر. لما تسجل عملية هسألك لو بتتكرر، وكمان بكتشف لوحدي أي عملية بتتكرر بانتظام (إيجار، راتب، اشتراك...) وبنبّهك قبل الموعد بـ' + PE.SOON + ' أيام وفي يومه.</div>';
+    const ignHtml = ign.length ? `<details class="card"><summary>المتجاهَلة (${ign.length})</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${ign.map((l) => `<div class="row between"><span class="small" style="font-size:13px">${esc(l.label || catOf(l.cat).name)} · ${esc(l.kind)}</span><button class="btn ghost" data-act="pay-restore" data-k="${esc(l.key)}">رجّعه</button></div>`).join('')}</div></details>` : '';
+    const note = cap('LocalNotifications') ? '' : '<div class="small" style="padding:0 4px">إشعارات النظام بتشتغل في تطبيق الأندرويد. هنا التنبيه بيظهر جوه التطبيق وهو مفتوح.</div>';
+    return `<div class="screen"><div><div class="h" style="font-size:20px;padding:4px">التذكير</div><div class="small" style="padding:0 4px">المدفوعات والدخل المتكرر: اللي أكدتّه بنفسك واللي اكتشفته من عملياتك. بنبّهك قبل الموعد بـ${PE.SOON} أيام وفي يومه.</div></div>${note}${sec('محتاج انتباه', urgent)}${sec('جاي قريب', later)}${empty}${ignHtml}<button class="btn ghost" data-act="rc-new">+ دفعة متكررة جديدة</button></div>`;
+  }
+  // الدفعات المؤكدة ليها كارت خاص في الرئيسية، فهنا بنعرض بس المكتشف تلقائياً
+  function payAlertHtml() {
+    const u = payUrgentList().filter((l) => l.src === 'auto'); if (!u.length) return '';
+    const names = u.slice(0, 2).map((l) => `${esc(l.label || catOf(l.cat).name)} (${PE.dueText(l.daysLeft)})`).join(' · ') + (u.length > 2 ? ` و${u.length - 2} كمان` : '');
+    return `<button class="card payalert" data-act="tab" data-id="pay"><span class="dot blink" aria-hidden="true"></span><span class="grow"><b>${u.length > 1 ? 'اكتشفت ' + u.length + ' مواعيد قريبة من عملياتك' : 'اكتشفت موعد قريب من عملياتك'}</b><span class="small" style="display:block">${names}</span></span><span aria-hidden="true">‹</span></button>`;
+  }
+  function payDo(key) {
+    const l = payAuto().find((x) => x.key === key); if (!l) return;
+    ui.draft = null; openManual();
+    const sh = ui.sheet; sh.catManual = true; sh.subManual = true;
+    sh.tx = { type: l.type, amount: String(l.avg), label: l.label, cat: l.cat, sub: l.sub, acc: validAcc(l.acc), to: '' };
+    render();
+  }
+  // تثبيت عنصر مكتشف كدفعة متكررة مؤكدة (شهري أو سنوي بس، لأن الدفعات المؤكدة بالشهور)
+  function payPin(key) {
+    const l = payAuto().find((x) => x.key === key); if (!l || (l.pattern.kind !== 'month' && l.pattern.kind !== 'year')) return;
+    const every = l.pattern.kind === 'year' ? 12 : 1; const day = l.pattern.kind === 'month' ? (l.pattern.dom === 'eom' ? 31 : l.pattern.dom) : new Date(l.due).getDate();
+    ui.recQueue = [];
+    ui.sheet = { type: 'recur', mode: 'ask', label: l.label, amount: String(l.avg), ttype: l.type, cat: l.cat, sub: l.sub || '', acc: validAcc(l.acc), every, day, next: l.due, confirm: false };
+    render();
+  }
+  // إشعارات النظام للمكتشف تلقائياً: قبل الموعد بـ3 أيام وفي يومه، بنفس وقت تذكير الدفعات من الإعدادات
+  function schedulePayNotifs() {
+    clearTimeout(schedulePayNotifs._t);
+    schedulePayNotifs._t = setTimeout(async () => {
+      const LN = cap('LocalNotifications'); if (!LN) return;
+      try {
+        const pend = await LN.getPending(); const old = pend.notifications.filter((n) => n.id >= PAY_ID0 && n.id < 100000); if (old.length) await LN.cancel({ notifications: old });
+        const tp = String(S.settings.recurTime || '09:00').split(':'); const now = Date.now(); const list = [];
+        payItems().filter((l) => l.src === 'auto' && !l.ignored).slice(0, 100).forEach((l, i) => {
+          const name = l.label || catOf(l.cat).name; const isIn = l.type === 'in'; const amt = fmt(l.avg); const what = isIn ? 'استلام' : 'دفع';
+          const due = new Date(l.due); due.setHours(+tp[0] || 0, +tp[1] || 0, 0, 0); const pre = new Date(due.getTime() - PE.SOON * DAY);
+          const mk = (n, at, body) => { if (at.getTime() > now + 6e4) list.push({ id: PAY_ID0 + i * 2 + n, title: 'محفظتي', body, channelId: 'payments', schedule: { at, allowWhileIdle: true } }); };
+          mk(0, pre, `بعد ${PE.SOON} أيام ميعاد ${what} ${name} (حوالي ${amt})`);
+          mk(1, due, `النهارده ميعاد ${what} ${name} (حوالي ${amt})`);
+        });
+        if (!list.length) return;
+        let perm = await LN.checkPermissions(); if (perm.display !== 'granted') perm = await LN.requestPermissions(); if (perm.display !== 'granted') return;
+        await LN.createChannel({ id: 'payments', name: 'تذكير المدفوعات المكتشفة', description: 'تنبيه قبل مواعيد المدفوعات والدخل المتكرر اللي اكتشفها التطبيق', importance: 5, visibility: 1, vibration: true, lights: true });
+        await LN.schedule({ notifications: list });
+      } catch (e) { /* ignore */ }
+    }, 2500);
+  }
+
   /* ---------- أحداث ---------- */
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]'); if (!el) return; const a = el.dataset.act;
@@ -843,6 +944,10 @@
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
       case 'te-pick': { const sh = ui.sheet; const k = el.dataset.k; sh.tx[k] = el.dataset.v; if (k === 'cat') { sh.catManual = true; sh.hint = ''; if (sh.tx.sub && !engine.subsOf(sh.tx.cat).some((x) => x.id === sh.tx.sub)) sh.tx.sub = ''; } if (k === 'sub') sh.subManual = true; render(); break; }
       case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat' && it.sub && !engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; render(); break; }
+      case 'pay-do': payDo(el.dataset.k); break;
+      case 'pay-pin': payPin(el.dataset.k); break;
+      case 'pay-ignore': S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('اتجاهلته. تقدر ترجّعه من آخر صفحة التذكير'); break;
+      case 'pay-restore': S.payIgnore = S.payIgnore || {}; delete S.payIgnore[el.dataset.k]; save(); render(); break;
       case 'rc-ask': S.settings.askRecur = el.dataset.v; save(); render(); break;
       case 'rc-new': ui.sheet = { type: 'recur', mode: 'new', label: '', amount: '', ttype: 'out', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), every: 1, day: new Date().getDate(), next: nextFrom(new Date().getDate(), 1, 'new'), confirm: false }; render(); break;
       case 'rc-open': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'recur', mode: 'edit', id: r.id, label: r.label, amount: String(r.amount), ttype: r.type, cat: r.cat, sub: r.sub || '', acc: r.acc, every: r.every, day: r.day, next: r.next, confirm: false }; render(); } break; }
@@ -1015,7 +1120,7 @@
       if (perm.display !== 'granted') { if (announce) toast('لازم تسمح بالإشعارات من إعدادات التليفون'); return; }
       await LN.createChannel({ id: 'reminders', name: 'تذكير المصاريف', description: 'تذكير تسجيل المصاريف', importance: 4, visibility: 1, vibration: true });
       await LN.registerActionTypes({ types: [{ id: 'REMINDER', actions: [{ id: 'open', title: 'فتح' }, { id: 'skip', title: 'تخطي' }] }] });
-      const pend = await LN.getPending(); const mineR = pend.notifications.filter((n) => n.id < 100000); if (mineR.length) await LN.cancel({ notifications: mineR });
+      const pend = await LN.getPending(); const mineR = pend.notifications.filter((n) => n.id < PAY_ID0); if (mineR.length) await LN.cancel({ notifications: mineR });
       if (!S.settings.remind) { if (announce) toast('التذكير متوقف'); return; }
       const list = reminderTimes();
       await LN.schedule({ notifications: list.map((t) => ({ id: 1000 + toMin(t), title: 'محفظتي', body: S.settings.remindText, channelId: 'reminders', actionTypeId: 'REMINDER', schedule: { on: { hour: Math.floor(toMin(t) / 60), minute: toMin(t) % 60 }, allowWhileIdle: true } })) });
@@ -1052,6 +1157,7 @@
     const LN = cap('LocalNotifications'); if (!LN) return;
     LN.addListener('localNotificationActionPerformed', (ev) => {
       if (ev.actionId === 'skip') { const App = cap('App'); if (App && App.minimizeApp) App.minimizeApp(); return; }
+      if (ev.notification && ev.notification.id >= PAY_ID0) { ui.tab = 'pay'; render(); window.scrollTo(0, 0); return; }
       ui.tab = 'home'; render(); setTimeout(() => { const i = $('#inp'); if (i) i.focus(); }, 150);
     });
   })();
@@ -1075,7 +1181,7 @@
   scheduleRecur();
   checkUpdate();
   setInterval(checkUpdate, 10 * 60 * 1000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkUpdate(); if (!ui.sheet) render(); } });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkUpdate(); schedulePayNotifs(); if (!ui.sheet) render(); } });
   if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', () => applyTheme()); }
   applyReminders(false);
   window.__mahfazty = { S: () => S, ui, render, engine, reminderTimes, checkBanner };
