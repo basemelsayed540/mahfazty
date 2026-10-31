@@ -157,3 +157,7 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .updnote{border-color:var(--accent);background:var(--accent-soft)}
 
 .subchip{display:inline-block;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+
+.duecard{border-color:var(--accent);display:flex;flex-direction:column;gap:10px}
+.dueitem{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.dueitem:first-of-type{border-top:0;padding-top:0}
