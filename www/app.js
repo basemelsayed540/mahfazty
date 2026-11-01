@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.15.1';
+  const APP_VERSION = '1.16.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -74,6 +74,18 @@
     return b;
   }
   const inMonth = (y, m) => S.txs.filter((t) => { const d = new Date(t.ts); return d.getFullYear() === y && d.getMonth() === m; });
+  // المتبقي من الشهور السابقة: الأرصدة الافتتاحية + صافي كل العمليات قبل أول الشهر ده
+  function carryOver(y, m) {
+    const start = new Date(y, m, 1).getTime(); const per = {};
+    S.accounts.forEach((a) => { per[a.id] = a.opening || 0; });
+    S.txs.forEach((t) => {
+      if (t.ts >= start) return;
+      if (t.type === 'in') per[t.acc] = (per[t.acc] || 0) + t.amount; else if (t.type === 'out') per[t.acc] = (per[t.acc] || 0) - t.amount;
+      else if (t.type === 'xfer') { per[t.acc] = (per[t.acc] || 0) - t.amount; per[t.to] = (per[t.to] || 0) + t.amount; }
+    });
+    return { per, total: Object.keys(per).reduce((a, k) => a + per[k], 0) };
+  }
+  const signed = (v) => (v < 0 ? '-' : '') + fmt(Math.abs(v));
   const sumBy = (arr, type) => arr.filter((t) => t.type === type).reduce((a, t) => a + t.amount, 0);
   function byCat(arr) { const o = {}; arr.filter((t) => t.type === 'out').forEach((t) => { o[t.cat] = (o[t.cat] || 0) + t.amount; }); return o; }
 
@@ -97,6 +109,7 @@
     return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}${payAlertHtml()}
       <div class="total"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
+      <button class="card carry" data-act="tab" data-id="month" style="display:flex;justify-content:space-between;align-items:center"><span><span class="small" style="display:block">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(carryOver(nowD.getFullYear(), nowD.getMonth()).total)}</b></span><span class="small">التفاصيل ‹</span></button>
       <div class="accs3">${S.accounts.map((a) => `<button class="acard" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${fmt(b[a.id] || 0)}"><span>${esc(a.name)}</span><b>${fmt(b[a.id] || 0)}</b></button>`).join('')}</div>
       <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
@@ -222,10 +235,13 @@
       const subLines = Object.keys(sm).length ? `<div class="small">${Object.keys(sm).map((id) => `${esc(engine.subName(k, id))} ${fmt(sm[id])}`).join(' · ')}</div>` : '';
       return `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}${bud ? ` <span class="small">(من ${fmt(bud)})</span>` : ''}</span><span class="${over ? 'neg' : ''}">${fmt(cats[k])}</span></div><div class="bar"><i style="width:${bud ? Math.min(100, cats[k] / bud * 100) : pct}%;background:${over ? 'var(--red)' : catOf(k).color}"></i></div>${subLines}</div>`;
     }).join('') : '<div class="small">مفيش مصروفات في الشهر ده.</div>';
+    const co = carryOver(y, m); const endBal = co.total + net;
+    const carryCard = `<div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(co.total)}</b></div>${accIds().map((a) => `<div class="row between small"><span>${accName(a)}</span><span>${signed(co.per[a] || 0)}</span></div>`).join('')}<div class="row between" style="border-top:1px dashed var(--line);padding-top:8px"><span class="h">المتبقي آخر الشهر</span><b style="font-size:18px">${signed(endBal)}</b></div><div class="small">المتبقي آخر الشهر = المتبقي من الشهر السابق + دخل الشهر - مصروفه.</div></div>`;
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
     return `<div class="screen">
       <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
+      ${carryCard}
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">أيام الشهر</span><span class="small">الغامق = صرف أكتر</span></div><div class="legend"><span><i style="background:var(--redf)"></i>مصروف</span><span><i style="background:var(--tealf)"></i>دخل</span><span><i class="bothi"></i>الاتنين</span></div>
         <div class="dow"><span>سبت</span><span>أحد</span><span>اثنين</span><span>ثلاثاء</span><span>أربعاء</span><span>خميس</span><span>جمعة</span></div><div class="days">${cells}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
