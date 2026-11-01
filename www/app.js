@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.18.1';
+  const APP_VERSION = '1.18.2';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -131,7 +131,8 @@
     if (q) arr = arr.filter((t) => norm1((t.label || '') + ' ' + catOf(t.cat).name + ' ' + engine.subName(t.cat, t.sub)).indexOf(q) >= 0 || String(t.amount) === q);
     const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out');
     let html = ''; let last = '';
-    arr.slice(0, 300).forEach((t) => { const k = ymd(t.ts); if (k !== last) { last = k; html += `<div class="small" style="padding:6px 4px 0">${esc(dayLabel(t.ts))}</div>`; } html += txRow(t); });
+    const dayAgg = {}; arr.forEach((t) => { const k = ymd(t.ts); const a = dayAgg[k] || (dayAgg[k] = { n: 0, i: 0, o: 0 }); a.n++; if (t.type === 'in') a.i += t.amount; else if (t.type === 'out') a.o += t.amount; });
+    arr.slice(0, 300).forEach((t) => { const k = ymd(t.ts); if (k !== last) { last = k; const a = dayAgg[k]; html += `<div class="dayhead"><b>${esc(dayLabel(t.ts))}</b><span class="neg">${a.o ? '-' + fmt(a.o) : ''}</span><span class="pos">${a.i ? '+' + fmt(a.i) : ''}</span><span class="small">${a.n} عملية</span></div>`; } html += txRow(t); });
     const seg = (id, n) => `<button class="${f === id ? 'on' : ''}" data-act="hf" data-v="${id}">${n}</button>`;
     const accSeg = `<div class="pick" role="group" aria-label="الحساب">${pickHtml([{ id: '', name: 'كل الحسابات' }].concat(accList()), ui.ha || '', 'data-act="ha"')}</div>`;
     return `<input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">

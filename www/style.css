@@ -184,3 +184,5 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .sheet .field.col{gap:4px}.sheet .field.col>label{font-size:12px;color:var(--mute);min-width:0}
 .sheet #te_hint:empty{display:none}
 .sheet .row.stick{position:sticky;bottom:calc(-12px - env(safe-area-inset-bottom));background:var(--bg);padding:8px 0 calc(6px + env(safe-area-inset-bottom));z-index:2;border-top:1px solid var(--line)}
+
+.dayhead{display:flex;align-items:center;gap:10px;padding:8px 4px 2px;font-size:14px;white-space:nowrap}.dayhead b{flex:1;font-weight:800;overflow:hidden;text-overflow:ellipsis}.dayhead .neg,.dayhead .pos{font-weight:800;font-size:13.5px}
