@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.17.1';
+  const APP_VERSION = '1.18.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -959,12 +959,17 @@
   }
   function payHtml() {
     const all = payList(); const live = all.filter((l) => !l.ignored); const ign = all.filter((l) => l.ignored);
-    const urgent = live.filter(payUrgent); const later = live.filter((l) => !payUrgent(l));
-    const sec = (t, arr) => (arr.length ? `<div style="display:flex;flex-direction:column;gap:8px"><div class="h" style="padding:0 4px">${t}</div>${arr.map(payCard).join('')}</div>` : '');
+    const BK = [['today', 'النهارده', (l) => l.daysLeft <= 0], ['tomorrow', 'بكرة', (l) => l.daysLeft === 1], ['week', 'بعد أسبوع', (l) => l.daysLeft >= 2 && l.daysLeft <= 7], ['other', 'أخرى', (l) => l.daysLeft > 7]];
+    const cur = ui.payTab || 'today'; const bucketOf = (id) => BK.find((x) => x[0] === id) || BK[0];
+    const inB = (id) => live.filter(bucketOf(id)[2]);
+    const tabsBar = `<div class="seg" role="tablist" aria-label="مواعيد التذكير">${BK.map((x) => `<button role="tab" class="${cur === x[0] ? 'on' : ''}" data-act="pay-tab" data-v="${x[0]}">${x[1]}${inB(x[0]).length ? ` (${inB(x[0]).length})` : ''}</button>`).join('')}</div>`;
+    const shown = inB(cur);
+    const noteB = cur === 'today' ? 'شامل المتأخر' : cur === 'week' ? 'من بعد بكرة لحد 7 أيام' : cur === 'other' ? 'أكتر من أسبوع' : '';
+    const sec = () => (live.length ? `<div style="display:flex;flex-direction:column;gap:8px">${tabsBar}${noteB ? `<div class="small" style="padding:0 4px">${noteB}</div>` : ''}${shown.length ? shown.map(payCard).join('') : '<div class="card small">مفيش تذكيرات هنا.</div>'}</div>` : '');
     const empty = live.length ? '' : '<div class="card small" style="line-height:1.9">لسه مفيش مدفوعات أو دخل متكرر. لما تسجل عملية هسألك لو بتتكرر، وكمان بكتشف لوحدي أي عملية بتتكرر بانتظام (إيجار، راتب، اشتراك...) وبنبّهك قبل الموعد بـ' + PE.SOON + ' أيام وفي يومه.</div>';
     const ignHtml = ign.length ? `<details class="card"><summary>المتجاهَلة (${ign.length})</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${ign.map((l) => `<div class="row between"><span class="small" style="font-size:13px">${esc(l.label || catOf(l.cat).name)} · ${esc(l.kind)}</span><button class="btn ghost" data-act="pay-restore" data-k="${esc(l.key)}">رجّعه</button></div>`).join('')}</div></details>` : '';
     const note = cap('LocalNotifications') ? '' : '<div class="small" style="padding:0 4px">إشعارات النظام بتشتغل في تطبيق الأندرويد. هنا التنبيه بيظهر جوه التطبيق وهو مفتوح.</div>';
-    return `<div class="screen"><div><div class="h" style="font-size:20px;padding:4px">التذكير</div><div class="small" style="padding:0 4px">المدفوعات والدخل المتكرر: اللي أكدتّه بنفسك واللي اكتشفته من عملياتك. بنبّهك قبل الموعد بـ${PE.SOON} أيام وفي يومه.</div></div>${note}${sec('محتاج انتباه', urgent)}${sec('جاي قريب', later)}${empty}${ignHtml}<button class="btn ghost" data-act="rc-new">+ تذكير جديد (تجديد رخصة، بطاقة، دفعة...)</button></div>`;
+    return `<div class="screen"><div><div class="h" style="font-size:20px;padding:4px">التذكير</div><div class="small" style="padding:0 4px">المدفوعات والدخل المتكرر: اللي أكدتّه بنفسك واللي اكتشفته من عملياتك. بنبّهك قبل الموعد بـ${PE.SOON} أيام وفي يومه.</div></div>${note}${sec()}${empty}${ignHtml}<button class="btn ghost" data-act="rc-new">+ تذكير جديد (تجديد رخصة، بطاقة، دفعة...)</button></div>`;
   }
   // الدفعات المؤكدة ليها كارت خاص في الرئيسية، فهنا بنعرض بس المكتشف تلقائياً
   function payAlertHtml() {
@@ -1021,6 +1026,7 @@
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
       case 'te-pick': { const sh = ui.sheet; const k = el.dataset.k; sh.tx[k] = el.dataset.v; if (k === 'cat') { sh.catManual = true; sh.hint = ''; if (sh.tx.sub && !engine.subsOf(sh.tx.cat).some((x) => x.id === sh.tx.sub)) sh.tx.sub = ''; } if (k === 'sub') sh.subManual = true; render(); break; }
       case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat' && it.sub && !engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; render(); break; }
+      case 'pay-tab': ui.payTab = el.dataset.v; render(); break;
       case 'pay-do': payDo(el.dataset.k); break;
       case 'pay-pin': payPin(el.dataset.k); break;
       case 'pay-ignore': S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('اتجاهلته. تقدر ترجّعه من آخر صفحة التذكير'); break;
