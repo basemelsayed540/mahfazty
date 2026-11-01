@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.14.0';
+  const APP_VERSION = '1.15.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -353,13 +353,13 @@
     const t = sh.tx; const isX = t.type === 'xfer';
     const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
-      ? `<div class="field col"><label>من</label><div class="pick">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col"><label>إلى</label><div class="pick">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
-      : `<div class="field"><label for="te_label">الوصف</label><input id="te_label" data-te="label" value="${esc(t.label)}"></div><div class="field col"><label>التصنيف</label><div class="pick" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div id="te_subwrap">${subRowHtml(sh)}</div><div class="field col"><label>الحساب</label><div class="pick">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
+      ? `<div class="field col"><label>من</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col"><label>إلى</label><div class="pick hs">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
+      : `<div class="field col"><label>التصنيف</label><div class="pick hs" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div id="te_subwrap">${subRowHtml(sh)}</div><div class="field col"><label>الحساب</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
     const actions = sh.confirm
       ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
-      : `<div class="row"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
+      : `<div class="row stick"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
     return `<div class="h" style="font-size:18px">${sh.isNew ? 'إدخال يدوي' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${sh.isNew ? entryModeSeg('manual') : ''}${typeSeg}
-      <div class="field"><label for="te_amount">المبلغ</label><input id="te_amount" data-te="amount" inputmode="decimal" value="${esc(t.amount)}"></div>${fields}
+      <div class="row2"><input id="te_amount" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}">${isX ? '' : `<input id="te_label" data-te="label" placeholder="الوصف (مثال: غدا)" aria-label="الوصف" value="${esc(t.label)}">`}</div>${fields}
       ${sh.isNew ? '' : `<div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
       <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>`}${actions}`;
   }
@@ -399,7 +399,7 @@
   const subChipHtml = (t) => { const n = t.sub ? engine.subName(t.cat, t.sub) : ''; return n ? `<span class="subchip">${esc(n)}</span>` : ''; };
   function subRowHtml(sh) {
     const t = sh.tx; if (t.type === 'xfer') return ''; const subs = engine.subsOf(t.cat); if (!subs.length) return '';
-    return `<div class="field col"><label>البند</label><div class="pick"><button type="button" class="pk${!t.sub ? ' on' : ''}" data-act="te-pick" data-k="sub" data-v="">بدون</button>${subs.map((x) => `<button type="button" class="pk${x.id === t.sub ? ' on' : ''}" data-act="te-pick" data-k="sub" data-v="${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`;
+    return `<div class="field col"><label>البند</label><div class="pick hs"><button type="button" class="pk${!t.sub ? ' on' : ''}" data-act="te-pick" data-k="sub" data-v="">بدون</button>${subs.map((x) => `<button type="button" class="pk${x.id === t.sub ? ' on' : ''}" data-act="te-pick" data-k="sub" data-v="${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`;
   }
   function subPickHtml(it, i) {
     const subs = engine.subsOf(it.cat); if (!subs.length) return '';
@@ -711,8 +711,11 @@
   }
 
   /* ---------- المدفوعات المتكررة ---------- */
-  const EVERY = [{ id: '0', name: 'مرة واحدة' }, { id: '1', name: 'كل شهر' }, { id: '3', name: 'كل 3 شهور' }, { id: '6', name: 'كل 6 شهور' }, { id: '12', name: 'كل سنة' }];
-  const everyName = (n) => (n === 1 ? 'كل شهر' : n === 12 ? 'كل سنة' : `كل ${n} شهور`);
+  const EVERY = [{ id: '0', name: 'مرة واحدة' }, { id: 'd', name: 'كل يوم' }, { id: 'w', name: 'كل أسبوع' }, { id: '1', name: 'كل شهر' }, { id: '3', name: 'كل 3 شهور' }, { id: '6', name: 'كل 6 شهور' }, { id: '12', name: 'كل سنة' }];
+  const isStep = (e) => e === 'd' || e === 'w';
+  const stepDays = (e) => (e === 'd' ? 1 : 7);
+  const askMode = () => (S.settings.askRecur === 'smart' ? 'smart' : 'always');
+  const everyName = (n) => (n === 'd' ? 'كل يوم' : n === 'w' ? 'كل أسبوع' : n === 1 ? 'كل شهر' : n === 12 ? 'كل سنة' : `كل ${n} شهور`);
   const mkDate = (y, m, d) => { const dim = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(d, dim)); };
   const dLabel = (ts) => { const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
   const recKey = (x) => norm1(x.label) || (x.cat + '|' + (x.sub || ''));
@@ -724,12 +727,14 @@
     return 0;
   }
   function nextFrom(day, every, mode, base) {
+    if (isStep(every)) { const t0 = startOfDay(Date.now()); return mode === 'ask' ? PE.addDays(t0, stepDays(every)) : t0; }
     const n = new Date(); if (mode === 'ask') return mkDate(n.getFullYear(), n.getMonth() + (every || 1), day).getTime();
     let t = mkDate(n.getFullYear(), n.getMonth(), day).getTime(); if (t < startOfDay(Date.now())) t = mkDate(n.getFullYear(), n.getMonth() + 1, day).getTime(); return base && base > t ? base : t;
   }
   function advanceRec(r) {
     let guard = 0;
-    do { const d = new Date(r.next); r.next = mkDate(d.getFullYear(), d.getMonth() + r.every, r.day).getTime(); guard++; } while (r.next < startOfDay(Date.now()) && guard < 60);
+    if (isStep(r.every)) { do { r.next = PE.addDays(r.next, stepDays(r.every)); guard++; } while (r.next < startOfDay(Date.now()) && guard < 800); }
+    else do { const d = new Date(r.next); r.next = mkDate(d.getFullYear(), d.getMonth() + r.every, r.day).getTime(); guard++; } while (r.next < startOfDay(Date.now()) && guard < 60);
     save(); scheduleRecur();
   }
   function recurSheetFor(tx) {
@@ -738,19 +743,33 @@
   }
   // بعد حفظ عمليات: يربطها بدفعة موجودة، أو يفتح سؤال التكرار
   function afterSave(txs, payFor) {
-    const list = Array.isArray(txs) ? txs : [txs]; const queue = []; let note = '';
+    const list = Array.isArray(txs) ? txs : [txs]; const queue = []; let note = ''; let warn = '';
     list.forEach((tx) => {
       if (!tx || tx.type === 'xfer') return;
+      const vn = varNote(tx); if (vn) warn = warn ? warn + ' · ' + vn : vn;
       const pr = payFor ? recOf(payFor) : null;
       const r = pr || S.recurring.find((x) => x.type === tx.type && ((norm1(tx.label) && x.key === norm1(tx.label)) || (tx.sub && x.sub === tx.sub && x.cat === tx.cat)));
       if (r) { if (pr || r.next <= Date.now() + 10 * DAY) { advanceRec(r); note = `الميعاد الجاي ${dLabel(r.next)}`; } return; }
-      const am = S.settings.askRecur === true ? 'always' : S.settings.askRecur === false ? 'never' : (S.settings.askRecur || 'always');
-      if (am === 'never' || (am === 'smart' && !suggestEvery(tx))) return;
+      const am = askMode();
+      if (am === 'smart' && !suggestEvery(tx)) return;
       const k = recKey(tx); if (S.noRecur[k]) return;
       queue.push(tx);
     });
     if (queue.length) { ui.recQueue = queue.slice(1); ui.sheet = recurSheetFor(queue[0]); }
+    if (warn) setTimeout(() => toast('⚠ ' + warn, 8000), 3400);
     return note;
+  }
+  // تنبيه تلقائي لو المبلغ مختلف عن المعتاد في بند بيتكرر (مثلاً فاتورة الكهرباء)
+  function varNote(tx) {
+    try {
+      const rest = S.txs.filter((t) => t.id !== tx.id);
+      const l = PE.compute(rest, tx.ts, norm1, {}).find((x) => x.key === PE.keyOf(tx, norm1)); if (!l || l.count < 3 || !(l.avg > 0)) return '';
+      const nm = tx.label || catOf(tx.cat).name; const r = tx.amount / l.avg;
+      if (tx.type === 'out' && r >= 1.15 && tx.amount > l.max) return `${nm}: المبلغ أعلى من المعتاد، متوسطه ${fmt(l.avg)} وده ${fmt(tx.amount)}`;
+      if (tx.type === 'out' && r <= 0.85 && tx.amount < l.min) return `${nm}: المبلغ أقل من المعتاد، متوسطه ${fmt(l.avg)} وده ${fmt(tx.amount)}`;
+      if (tx.type === 'in' && r <= 0.85) return `${nm}: الدخل أقل من المعتاد، متوسطه ${fmt(l.avg)}`;
+    } catch (e) { /* ignore */ }
+    return '';
   }
   function recNext() { const nx = (ui.recQueue || []).shift(); ui.sheet = nx ? recurSheetFor(nx) : null; render(); }
   function recurSheetHtml(sh) {
@@ -758,19 +777,20 @@
     const title = sh.mode === 'ask' ? (isOut ? 'هل المبلغ ده بيتدفع بشكل متكرر؟' : 'هل الدخل ده بيتكرر؟') : sh.mode === 'edit' ? 'تعديل دفعة متكررة' : 'دفعة متكررة جديدة';
     const [hh, mm] = (S.settings.recurTime || '09:00').split(':'); const tt = timeStr(new Date(2000, 0, 1, +hh || 0, +mm || 0).getTime());
     const typeSeg = sh.mode === 'new' ? `<div class="seg" role="group" aria-label="النوع"><button class="${sh.ttype === 'out' ? 'on' : ''}" data-act="rc-type" data-v="out">مصروف</button><button class="${sh.ttype === 'in' ? 'on' : ''}" data-act="rc-type" data-v="in">دخل</button></div>` : '';
-    const more = sh.every > 0
+    const more = isStep(sh.every)
+      ? `<div class="field col"><label for="rc_next">ميعاد ${what} الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div><div class="ok">هفكّرك ${sh.every === 'd' ? 'كل يوم' : 'كل أسبوع في نفس اليوم'} الساعة ${tt}.</div>`
+      : sh.every > 0
       ? `<div class="field col"><label for="rc_day">يوم ${what} من الشهر (1 إلى 31)</label><input id="rc_day" type="number" min="1" max="31" inputmode="numeric" data-rc="day" value="${sh.day}"></div>
          <div class="field col"><label for="rc_next">ميعاد ${what} الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>
          <div class="ok">هفكّرك قبل الميعاد بـ3 أيام، وتاني يوم ${what} نفسه الساعة ${tt}.</div>`
       : (sh.mode === 'ask' ? '<div class="small">تمام، مرة واحدة. مش هسألك تاني عن نفس الوصف ده.</div>' : '<div class="warn">اختار التكرار (كل شهر أو كل 3 شهور...).</div>');
     let actions;
     if (sh.confirm) actions = '<div class="warn">متأكد إنك عايز تحذف الدفعة دي؟</div><div class="row"><button class="btn red grow" data-act="rc-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="rc-del-cancel">لا</button></div>';
-    else if (sh.mode === 'ask') actions = '<div class="row"><button class="btn primary grow" data-act="rc-save">حفظ</button><button class="btn ghost grow" data-act="rc-skip-ask">تخطي</button></div>';
-    else actions = `<div class="row"><button class="btn primary grow" data-act="rc-save">${sh.mode === 'new' ? 'إضافة' : 'حفظ'}</button>${sh.mode === 'edit' ? '<button class="btn red" data-act="rc-del-ask">حذف</button>' : ''}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
+    else if (sh.mode === 'ask') actions = '<div class="row stick"><button class="btn primary grow" data-act="rc-save">حفظ</button><button class="btn ghost grow" data-act="rc-skip-ask">تخطي</button></div>';
+    else actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">${sh.mode === 'new' ? 'إضافة' : 'حفظ'}</button>${sh.mode === 'edit' ? '<button class="btn red" data-act="rc-del-ask">حذف</button>' : ''}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
     return `<div class="h" style="font-size:18px">${title}</div>${typeSeg}
-      <div class="field col"><label for="rc_label">الوصف</label><input id="rc_label" data-rc="label" value="${esc(sh.label)}" placeholder="مثال: كهرباء"></div>
-      <div class="field col"><label for="rc_amount">المبلغ</label><input id="rc_amount" data-rc="amount" inputmode="decimal" value="${esc(sh.amount)}"></div>
-      <div class="field col"><label>بيتكرر كل قد إيه؟</label><div class="pick">${pickHtml(EVERY, String(sh.every), 'data-act="rc-every"')}</div></div>${more}${actions}`;
+      <div class="row2"><input id="rc_amount" data-rc="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(sh.amount)}"><input id="rc_label" data-rc="label" aria-label="الوصف" value="${esc(sh.label)}" placeholder="الوصف: كهرباء"></div>
+      <div class="field col"><label>بيتكرر كل قد إيه؟</label><div class="pick hs">${pickHtml(EVERY, String(sh.every), 'data-act="rc-every"')}</div></div>${more}${actions}`;
   }
   function rcSet(el, commit) {
     const sh = ui.sheet; if (!sh || sh.type !== 'recur') return; const k = el.dataset.rc;
@@ -788,7 +808,8 @@
     }
     if (sh.mode === 'new' && !label) { toast('اكتب وصف للدفعة'); return; }
     let next = sh.next; let guard = 0;
-    while (next < startOfDay(Date.now()) && guard++ < 60) { const d = new Date(next); next = mkDate(d.getFullYear(), d.getMonth() + sh.every, sh.day).getTime(); }
+    if (isStep(sh.every)) { while (next < startOfDay(Date.now()) && guard++ < 800) next = PE.addDays(next, stepDays(sh.every)); }
+    else while (next < startOfDay(Date.now()) && guard++ < 60) { const d = new Date(next); next = mkDate(d.getFullYear(), d.getMonth() + sh.every, sh.day).getTime(); }
     let cat = sh.cat; let sub = sh.sub; let acc = validAcc(sh.acc);
     if (sh.mode === 'new') {
       const pk = engine.pick(engine.scoreLabel(label).score, null, sh.ttype); cat = pk.cat; const sm = engine.matchSub(label, cat, sh.ttype, pk.conf === 'low'); sub = ''; if (sm) { cat = sm.cat; sub = sm.sub; } acc = validAcc(S.settings.lastAcc);
@@ -796,12 +817,12 @@
     const data = { label, amount, type: sh.ttype, cat, sub, acc, every: sh.every, day: sh.day, next, key: recKey({ label, cat, sub }) };
     if (sh.mode === 'edit') { const r = recOf(sh.id); if (r) Object.assign(r, data); } else { S.recNid += 1; S.recurring.push(Object.assign({ id: 'r_' + uid(), nid: S.recNid }, data)); }
     save(); scheduleRecur();
-    toast(`اتضبط التذكير: ${everyName(sh.every)} يوم ${sh.day}، الميعاد الجاي ${dLabel(next)}`, 4500);
+    toast(`اتضبط التذكير: ${everyName(sh.every)}${isStep(sh.every) ? '' : ' يوم ' + sh.day}، الميعاد الجاي ${dLabel(next)}`, 4500);
     if (sh.mode === 'ask') recNext(); else { ui.sheet = null; render(); }
   }
   function recurDueHtml() {
     const sod = startOfDay(Date.now());
-    const due = S.recurring.filter((r) => Math.round((startOfDay(r.next) - sod) / DAY) <= 3).sort((a, b) => a.next - b.next); if (!due.length) return '';
+    const due = S.recurring.filter((r) => Math.round((startOfDay(r.next) - sod) / DAY) <= (isStep(r.every) ? 0 : 3)).sort((a, b) => a.next - b.next); if (!due.length) return '';
     return `<div class="card duecard" role="status"><div class="h">مواعيد الدفع القريبة</div>${due.map((r) => {
       const dd = Math.round((startOfDay(r.next) - sod) / DAY); const st = dd < 0 ? `متأخر ${-dd} يوم` : dd === 0 ? 'النهارده' : `بعد ${dd} يوم`; const nm = r.label || catOf(r.cat).name; const what = r.type === 'in' ? 'استلام' : 'دفع';
       return `<div class="dueitem"><div class="row between"><div><div class="t1" style="font-weight:700">${what} ${esc(nm)}</div><div class="small">${fmt(r.amount)} · ${st}</div></div></div><div class="row"><button class="btn primary grow" data-act="rc-pay" data-id="${r.id}">${r.type === 'in' ? 'سجّل الاستلام' : 'سجّل الدفع'}</button><button class="btn ghost" data-act="rc-skip" data-id="${r.id}">تخطي</button></div></div>`;
@@ -811,10 +832,10 @@
     const st = S.settings;
     const rows = S.recurring.slice().sort((a, b) => a.next - b.next).map((r) => `<button class="chip" style="color:var(--ink);text-align:right;display:flex;justify-content:space-between;gap:8px;border-radius:14px;width:100%" data-act="rc-open" data-id="${r.id}"><span>${esc(r.label || catOf(r.cat).name)} · ${fmt(r.amount)}</span><span class="small">${everyName(r.every)} · الجاي ${dLabel(r.next)}</span></button>`).join('') || '<div class="small">لسه مفيش مدفوعات متكررة. هتتضاف لما تجاوب على سؤال "بيتكرر؟" وإنت بتسجل، أو تضيفها من هنا.</div>';
     return `<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المدفوعات المتكررة</div>
-      <div class="small">لما تسجل مصروف أو دخل هسألك لو بيتكرر، وهفكّرك قبل الميعاد بـ3 أيام وفي يوم الدفع.</div>
+      <div class="small">لما تسجل مصروف أو دخل هسألك لو بيتكرر (كل يوم أو أسبوع أو شهر...)، وهفكّرك قبل الميعاد بـ3 أيام وفي يوم الدفع. وكمان بكتشف لوحدي المصاريف المتكررة وأنبّهك لو المبلغ اتغيّر عن المعتاد. التنبيه ده شغّال دايماً ومش اختياري.</div>
       <div class="small">وقت تسجيل مصروف أو دخل جديد:</div>
-      <div class="seg" role="group" aria-label="السؤال عن التكرار">${[['always', 'اسألني دايماً'], ['smart', 'للشهري بس'], ['never', 'ما تسألش']].map((x) => `<button class="${(st.askRecur === true ? 'always' : st.askRecur === false ? 'never' : (st.askRecur || 'always')) === x[0] ? 'on' : ''}" data-act="rc-ask" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
-      <div class="small">"للشهري بس" يعني أسألك بس لو شكل المصروف متكرر زي الفواتير والإيجار والقسط والراتب.</div>
+      <div class="seg" role="group" aria-label="السؤال عن التكرار">${[['always', 'اسألني دايماً'], ['smart', 'للمتكرر بس']].map((x) => `<button class="${askMode() === x[0] ? 'on' : ''}" data-act="rc-ask" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
+      <div class="small">"للمتكرر بس" يعني أسألك بس لو شكل المصروف متكرر زي الفواتير والإيجار والقسط والراتب.</div>
       <div class="field"><label for="rtime" style="min-width:90px;font-size:13px;font-weight:600">وقت التذكير</label><input id="rtime" type="time" value="${esc(st.recurTime || '09:00')}"></div>
       <div style="display:flex;flex-direction:column;gap:6px">${rows}</div>
       <button class="btn primary" data-act="rc-new">+ دفعة متكررة جديدة</button></div>`;
@@ -830,6 +851,12 @@
       S.recurring.forEach((r) => {
         const due = new Date(r.next); due.setHours(+tp[0] || 0, +tp[1] || 0, 0, 0); const pre = new Date(due.getTime() - 3 * DAY);
         const what = r.type === 'in' ? 'استلام' : 'دفع'; const nm = r.label || catOf(r.cat).name; const amt = fmt(r.amount);
+        if (isStep(r.every)) {
+          const body = `ميعاد ${what} ${nm} (${amt})`;
+          const on = r.every === 'd' ? { hour: +tp[0] || 0, minute: +tp[1] || 0 } : { weekday: due.getDay() + 1, hour: +tp[0] || 0, minute: +tp[1] || 0 };
+          list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body, channelId: 'recur', schedule: { on, allowWhileIdle: true } });
+          return;
+        }
         if (pre.getTime() > now) list.push({ id: 100000 + r.nid * 2, title: 'محفظتي', body: `بعد 3 أيام ميعاد ${what} ${nm} (${amt})`, channelId: 'recur', schedule: { at: pre, allowWhileIdle: true } });
         if (due.getTime() > now) list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body: `النهارده ميعاد ${what} ${nm} (${amt})`, channelId: 'recur', schedule: { at: due, allowWhileIdle: true } });
       });
@@ -859,13 +886,13 @@
   }
   function payItems() {
     const today = startOfDay(Date.now()); const out = [];
-    S.recurring.forEach((r) => { out.push({ src: 'rec', id: r.id, type: r.type, label: r.label, cat: r.cat, avg: r.amount, due: r.next, daysLeft: Math.round((startOfDay(r.next) - today) / DAY), kind: `${everyName(r.every)} · يوم ${r.day}`, ignored: false }); });
-    payAuto().forEach((l) => { if (autoCovered(l) || autoBlocked(l)) return; out.push({ src: 'auto', key: l.key, type: l.type, label: l.label, cat: l.cat, sub: l.sub, acc: l.acc, avg: l.avg, due: l.due, daysLeft: l.daysLeft, kind: PE.kindText(l.pattern), count: l.count, pattern: l.pattern, ignored: l.ignored }); });
+    S.recurring.forEach((r) => { out.push({ src: 'rec', id: r.id, type: r.type, label: r.label, cat: r.cat, avg: r.amount, due: r.next, daysLeft: Math.round((startOfDay(r.next) - today) / DAY), kind: `${everyName(r.every)}${isStep(r.every) ? '' : ' · يوم ' + r.day}`, daily: r.every === 'd', ignored: false }); });
+    payAuto().forEach((l) => { if (autoCovered(l) || autoBlocked(l)) return; out.push({ src: 'auto', key: l.key, type: l.type, label: l.label, cat: l.cat, sub: l.sub, acc: l.acc, avg: l.avg, due: l.due, daysLeft: l.daysLeft, kind: PE.kindText(l.pattern), count: l.count, pattern: l.pattern, daily: l.pattern.kind === 'day', variable: l.variable, min: l.min, max: l.max, ignored: l.ignored }); });
     out.sort((a, b) => a.due - b.due);
     return out;
   }
   const payList = () => ui._items || payItems();
-  const payUrgent = (it) => !it.ignored && it.daysLeft <= PE.SOON;
+  const payUrgent = (it) => !it.ignored && it.daysLeft <= (it.daily ? 0 : PE.SOON);
   const payUrgentList = () => payList().filter(payUrgent);
   const payDateText = (ts) => { const d = new Date(ts); return `${PE.WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
   function payCard(it) {
@@ -878,7 +905,7 @@
     const more = rec
       ? `<button class="btn ghost" data-act="rc-skip" data-id="${k}">تخطي</button><button class="btn ghost" data-act="rc-open" data-id="${k}">تعديل</button>`
       : `${canPin ? `<button class="btn ghost" data-act="pay-pin" data-k="${k}">ثبّت</button>` : ''}<button class="btn ghost" data-act="pay-ignore" data-k="${k}">تجاهل</button>`;
-    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}</div></div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${isIn ? '+' : '-'}${fmt(it.avg)}</div><div class="small">${rec ? '&nbsp;' : 'تقريباً'}</div></div></div>
+    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}${it.variable ? ' · مبلغه بيتغير' : ''}</div></div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${isIn ? '+' : '-'}${fmt(it.avg)}</div><div class="small">${rec ? '&nbsp;' : it.variable ? 'بين ' + fmt(it.min) + ' و ' + fmt(it.max) : 'تقريباً'}</div></div></div>
       <div class="row between"><span class="duebadge${urgent ? ' hot' : ''}">${PE.dueText(it.daysLeft)}</span><span class="small">${payDateText(it.due)}</span><span class="srcbadge">${rec ? 'مؤكّد' : 'اكتشفته من عملياتك'}</span></div>
       <div class="row" style="flex-wrap:wrap"><button class="btn ${isIn ? 'teal' : 'primary'} grow" ${doAct}>${isIn ? 'سجّل الاستلام' : 'سجّل الدفع'}</button>${more}</div></div>`;
   }
@@ -924,8 +951,9 @@
           const name = l.label || catOf(l.cat).name; const isIn = l.type === 'in'; const amt = fmt(l.avg); const what = isIn ? 'استلام' : 'دفع';
           const due = new Date(l.due); due.setHours(+tp[0] || 0, +tp[1] || 0, 0, 0); const pre = new Date(due.getTime() - PE.SOON * DAY);
           const mk = (n, at, body) => { if (at.getTime() > now + 6e4) list.push({ id: PAY_ID0 + i * 2 + n, title: 'محفظتي', body, channelId: 'payments', schedule: { at, allowWhileIdle: true } }); };
-          mk(0, pre, `بعد ${PE.SOON} أيام ميعاد ${what} ${name} (حوالي ${amt})`);
-          mk(1, due, `النهارده ميعاد ${what} ${name} (حوالي ${amt})`);
+          const vr = l.variable ? `، بيتغير بين ${fmt(l.min)} و ${fmt(l.max)}` : '';
+          if (!l.daily) mk(0, pre, `بعد ${PE.SOON} أيام ميعاد ${what} ${name} (حوالي ${amt}${vr})`);
+          mk(1, due, `النهارده ميعاد ${what} ${name} (حوالي ${amt}${vr})`);
         });
         if (!list.length) return;
         let perm = await LN.checkPermissions(); if (perm.display !== 'granted') perm = await LN.requestPermissions(); if (perm.display !== 'granted') return;
@@ -952,7 +980,7 @@
       case 'rc-new': ui.sheet = { type: 'recur', mode: 'new', label: '', amount: '', ttype: 'out', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), every: 1, day: new Date().getDate(), next: nextFrom(new Date().getDate(), 1, 'new'), confirm: false }; render(); break;
       case 'rc-open': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'recur', mode: 'edit', id: r.id, label: r.label, amount: String(r.amount), ttype: r.type, cat: r.cat, sub: r.sub || '', acc: r.acc, every: r.every, day: r.day, next: r.next, confirm: false }; render(); } break; }
       case 'rc-type': ui.sheet.ttype = el.dataset.v; render(); break;
-      case 'rc-every': { const sh = ui.sheet; sh.every = +el.dataset.v; if (sh.every > 0) sh.next = sh.mode === 'ask' ? nextFrom(sh.day, sh.every, 'ask') : (sh.next || nextFrom(sh.day, sh.every, 'new')); render(); break; }
+      case 'rc-every': { const sh = ui.sheet; sh.every = isStep(el.dataset.v) ? el.dataset.v : +el.dataset.v; if (sh.every !== 0) sh.next = sh.mode === 'ask' ? nextFrom(sh.day, sh.every, 'ask') : (sh.next || nextFrom(sh.day, sh.every, 'new')); render(); break; }
       case 'rc-save': rcSave(); break;
       case 'rc-skip-ask': recNext(); break;
       case 'rc-del-ask': ui.sheet.confirm = true; render(); break;
@@ -1184,5 +1212,10 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkUpdate(); schedulePayNotifs(); if (!ui.sheet) render(); } });
   if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', () => applyTheme()); }
   applyReminders(false);
+  (function kbAware() {
+    const vv = window.visualViewport; const set = () => document.documentElement.style.setProperty('--vvh', (vv ? vv.height : window.innerHeight) + 'px');
+    set(); if (vv) { vv.addEventListener('resize', set); vv.addEventListener('scroll', set); } window.addEventListener('resize', set);
+    document.addEventListener('focusin', (e) => { const t = e.target; if (t && t.closest && t.closest('.sheet') && /^(INPUT|TEXTAREA)$/.test(t.tagName)) setTimeout(() => { try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) { /* ignore */ } }, 320); });
+  })();
   window.__mahfazty = { S: () => S, ui, render, engine, reminderTimes, checkBanner };
 })();

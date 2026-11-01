@@ -6,7 +6,7 @@
   const LATE_GRACE = 5; // أيام نعتبره فيها متأخر، بعدها نفترض إنه اتخطى ونعرض الدورة اللي بعدها
   const HORIZON = 45; // بنعرض المواعيد خلال كام يوم
   const NOLABEL_CATS = ['bills', 'telecom', 'debt', 'salary']; // تصنيفات بنعتبرها متكررة حتى من غير وصف
-  const MAX_AGE = { week: 35, fortnight: 50, month: 100, year: 400 }; // لو آخر مرة أقدم من كده الدورة اتوقفت
+  const MAX_AGE = { day: 6, week: 35, fortnight: 50, month: 100, year: 400 }; // لو آخر مرة أقدم من كده الدورة اتوقفت
   const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
   const sod = (ts) => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
@@ -29,6 +29,7 @@
     const n = days.length; if (n < 2) return null;
     const gaps = []; const mg = [];
     for (let i = 1; i < n; i++) { gaps.push(Math.round((days[i] - days[i - 1]) / DAY)); mg.push(monthIdx(days[i]) - monthIdx(days[i - 1])); }
+    if (n >= 4 && gaps.every((g) => g === 1)) return { kind: 'day', step: 1, maxAge: MAX_AGE.day };
     if (n >= 3 && gaps.every((g) => near(g, 7, 1))) return { kind: 'week', step: 7, maxAge: MAX_AGE.week };
     if (n >= 3 && gaps.every((g) => near(g, 14, 2))) return { kind: 'fortnight', step: 14, maxAge: MAX_AGE.fortnight };
     const doms = days.map((d) => new Date(d).getDate());
@@ -42,7 +43,7 @@
   /* أول موعد بعد التاريخ ref */
   function nextAfter(p, ref) {
     const r = new Date(ref);
-    if (p.kind === 'week' || p.kind === 'fortnight') return addDays(ref, p.step);
+    if (p.kind === 'day' || p.kind === 'week' || p.kind === 'fortnight') return addDays(ref, p.step);
     if (p.kind === 'month') { const y = r.getFullYear(); const m = r.getMonth() + 1; const last = dim(y, m); return new Date(y, m, p.dom === 'eom' ? last : Math.min(p.dom, last)).getTime(); }
     return new Date(r.getFullYear() + 1, p.m, Math.min(p.d, dim(r.getFullYear() + 1, p.m))).getTime();
   }
@@ -61,8 +62,9 @@
       while (due < today - LATE_GRACE * DAY && guard++ < 80) due = nextAfter(p, due);
       const daysLeft = Math.round((due - today) / DAY); if (daysLeft > HORIZON) return;
       const recent = days.slice(-3).map((d) => byDay[d].amt); const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const all = days.map((d) => byDay[d].amt); const mn = Math.min.apply(null, all); const mx = Math.max.apply(null, all); const variable = all.length >= 3 && (mx - mn) / (avg || 1) > 0.12;
       const lt = byDay[lastDay].last;
-      out.push({ key: k, type: lt.type, label: (lt.label || '').trim(), cat: lt.cat, sub: lt.sub || '', acc: lt.acc, avg: Math.round(avg * 100) / 100, count: days.length, pattern: p, last: lastDay, due, daysLeft, ignored: !!(ignore && ignore[k]) });
+      out.push({ key: k, type: lt.type, label: (lt.label || '').trim(), cat: lt.cat, sub: lt.sub || '', acc: lt.acc, avg: Math.round(avg * 100) / 100, min: Math.round(mn * 100) / 100, max: Math.round(mx * 100) / 100, variable, count: days.length, pattern: p, last: lastDay, due, daysLeft, ignored: !!(ignore && ignore[k]) });
     });
     out.sort((a, b) => a.due - b.due);
     return out;
@@ -74,7 +76,7 @@
     return n <= 10 ? 'بعد ' + n + ' أيام' : 'بعد ' + n + ' يوم';
   }
   function kindText(p) {
-    if (p.kind === 'week') return 'أسبوعي'; if (p.kind === 'fortnight') return 'كل أسبوعين'; if (p.kind === 'year') return 'سنوي';
+    if (p.kind === 'day') return 'يومي'; if (p.kind === 'week') return 'أسبوعي'; if (p.kind === 'fortnight') return 'كل أسبوعين'; if (p.kind === 'year') return 'سنوي';
     return p.dom === 'eom' ? 'شهري · آخر الشهر' : 'شهري · يوم ' + p.dom;
   }
   const isUrgent = (l) => !l.ignored && l.daysLeft <= SOON;

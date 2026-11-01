@@ -115,8 +115,8 @@ input,select,textarea{font-family:inherit;color:var(--ink)}
 .xbtn{border:0;background:transparent;color:var(--mute);font-size:16px;min-width:32px;min-height:32px}
 
 /* sheet */
-.scrim{position:fixed;inset:0;background:rgba(42,27,16,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
-.sheet{background:var(--bg);width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:16px;max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.scrim{position:fixed;inset:0;bottom:auto;height:var(--vvh,100%);background:rgba(42,27,16,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{background:var(--bg);width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));max-height:calc(var(--vvh,100vh) - 10px);overflow:auto;display:flex;flex-direction:column;gap:8px}
 .toast{position:fixed;bottom:84px;right:16px;left:16px;max-width:488px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:14px;padding:12px 14px;font-size:14px;font-weight:600;z-index:30;line-height:1.6}
 details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;display:flex;align-items:center}
 
@@ -175,3 +175,12 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 @keyframes payblink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.5)}}
 @keyframes payglow{0%,100%{box-shadow:0 0 0 0 var(--o1)}50%{box-shadow:0 0 0 7px var(--o1)}}
 @media (prefers-reduced-motion: reduce){.pay.urgent,.payalert,.duecard,.dot.blink{animation:none}}
+
+/* قايمة الإدخال مدمجة علشان الكيبورد */
+.row2{display:flex;gap:8px}.row2 input{min-width:0;flex:1}.row2 input:first-child{flex:0 0 38%}
+.pick.hs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.pick.hs::-webkit-scrollbar{display:none}
+.pick.hs .pk{flex:0 0 auto;min-height:34px;padding:0 12px;font-size:13px}
+.sheet .field.col{gap:4px}.sheet .field.col>label{font-size:12px;color:var(--mute);min-width:0}
+.sheet #te_hint:empty{display:none}
+.sheet .row.stick{position:sticky;bottom:calc(-12px - env(safe-area-inset-bottom));background:var(--bg);padding:8px 0 calc(6px + env(safe-area-inset-bottom));z-index:2;border-top:1px solid var(--line)}
