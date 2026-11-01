@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.15.0';
+  const APP_VERSION = '1.15.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -140,7 +140,7 @@
   }
   function openManual() {
     const n = Date.now();
-    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, subManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
+    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, subManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: 'other', sub: '', acc: '', to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
   }
   function autoCat(sh) {
     if (!sh || sh.tx.type === 'xfer') return;
@@ -194,7 +194,7 @@
         : (it.usedContext ? `<div class="ok">فهمتها من سياق كلامك</div>` : '');
       return `<div class="ditem" data-i="${i}">
         <div class="row"><input data-f="amount" inputmode="decimal" aria-label="المبلغ" value="${esc(it.amount)}" style="max-width:110px"><input data-f="label" aria-label="الوصف" value="${esc(it.label)}" placeholder="الوصف"><button class="xbtn" data-act="del-item" data-i="${i}" aria-label="حذف البند">✕</button></div>
-        <div class="small">التصنيف</div><div class="pick">${catPick(it.type, it.cat, `data-act="di-pick" data-i="${i}" data-k="cat"`)}</div>${subPickHtml(it, i)}<div class="small">الحساب</div><div class="pick">${accPick(it.acc, `data-act="di-pick" data-i="${i}" data-k="acc"`)}</div>
+        <div class="small">التصنيف</div><div class="pick">${catPick(it.type, it.cat, `data-act="di-pick" data-i="${i}" data-k="cat"`)}</div>${subPickHtml(it, i)}<div class="small">الحساب${it.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</div><div class="pick hs">${accPick(it.acc, `data-act="di-pick" data-i="${i}" data-k="acc"`)}</div>
         <div class="seg" role="group" aria-label="النوع"><button class="${it.type === 'out' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="out">مصروف</button><button class="${it.type === 'in' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="in">دخل</button></div>
         ${msg}</div>`;
     }).join('');
@@ -354,7 +354,7 @@
     const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
       ? `<div class="field col"><label>من</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col"><label>إلى</label><div class="pick hs">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
-      : `<div class="field col"><label>التصنيف</label><div class="pick hs" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div id="te_subwrap">${subRowHtml(sh)}</div><div class="field col"><label>الحساب</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
+      : `<div class="field col"><label>التصنيف</label><div class="pick hs" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div id="te_subwrap">${subRowHtml(sh)}</div><div class="field col"><label>الحساب${t.acc ? '' : ` <span style="color:var(--red)">(اختار الحساب)</span>`}</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
     const actions = sh.confirm
       ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
       : `<div class="row stick"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
@@ -528,7 +528,7 @@
     if (r.kind === 'transfer') { ui.draft = { kind: 'transfer', amount: r.amount, from: r.from, to: r.to, dateOffset: r.dateOffset }; render(); return; }
     const useAI = !!(S.settings.aiOn && S.settings.aiKey && (!r.items.length || r.items.some((it) => it.conf === 'low')));
     if (!r.items.length && !useAI) { toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف، مثلاً: 50 فطار'); return; }
-    r.items.forEach((it) => { it.acc = validAcc(it.acc || S.settings.lastAcc); it.origCat = it.cat; it.origSub = it.sub || ''; });
+    r.items.forEach((it) => { it.acc = it.acc ? validAcc(it.acc) : ''; it.origCat = it.cat; it.origSub = it.sub || ''; });
     const token = uid();
     ui.draft = { kind: 'entry', items: r.items, dateOffset: r.dateOffset, ai: useAI ? 'pending' : '', token };
     render();
@@ -536,7 +536,7 @@
       aiParse(text).then((items) => {
         if (!ui.draft || ui.draft.token !== token) return;
         if (items && items.length) {
-          ui.draft.items = items.map((it) => ({ amount: it.amount, label: it.label, type: it.type, cat: it.cat, origCat: it.cat, acc: validAcc(it.acc || S.settings.lastAcc), conf: 'mid', sub: it.sub || '', origSub: it.sub || '' }));
+          ui.draft.items = items.map((it) => ({ amount: it.amount, label: it.label, type: it.type, cat: it.cat, origCat: it.cat, acc: it.acc ? validAcc(it.acc) : '', conf: 'mid', sub: it.sub || '', origSub: it.sub || '' }));
           ui.draft.ai = 'done';
         } else { ui.draft.ai = r.items.length ? '' : 'error'; if (!r.items.length) { ui.draft = null; toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف.'); return; } }
         render();
@@ -588,6 +588,7 @@
       ui.draft = null; ui.text = ''; save(); toast('اتسجل التحويل'); return;
     }
     const good = d.items.filter((it) => +it.amount > 0); const notes = [];
+    if (good.some((it) => !it.acc)) { toast('اختار الحساب لكل بند: نقدي أو محفظة أو انستا...'); render(); return; }
     good.forEach((it, i) => {
       const amount = +it.amount; S.txs.push({ id: uid(), ts: ts + i, type: it.type, amount, label: (it.label || '').trim(), cat: it.cat, acc: it.acc, sub: it.sub || '' });
       if (it.sub && it.sub !== it.origSub && it.label) { const ad = engine.learnSub(it.label, it.cat, it.sub); if (ad.length) notes.push(`اتعلمت إن "${ad.join(' ')}" = ${engine.subName(it.cat, it.sub)}`); }
@@ -607,6 +608,7 @@
     if (sh.isNew) {
       let subNote = '';
       const am = parseFloat(toDigits(t.amount)); if (!(am > 0)) { toast('اكتب مبلغ صحيح'); return; }
+      if (!t.acc || (t.type === 'xfer' && !t.to)) { toast(t.type === 'xfer' ? 'اختار الحساب اللي محوّل منه واللي محوّل له' : 'اختار الحساب الأول: نقدي أو محفظة أو انستا...'); sh.needAcc = true; render(); return; }
       const dq = (sh.date || '').split('-').map(Number); const tq = (sh.time || '00:00').split(':').map(Number);
       const ts0 = Date.now(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
