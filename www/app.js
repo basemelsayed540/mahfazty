@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.18.0';
+  const APP_VERSION = '1.18.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -141,8 +141,9 @@
       ${html || '<div class="card small">' + (S.txs.length ? 'مفيش عمليات مطابقة.' : 'لسه مفيش عمليات. اضغط "إدخال" فوق وسجّل أول عملية.') + '</div>'}`;
   }
 
-  function entryModeSeg(mode) {
-    return `<div class="seg" role="group" aria-label="طريقة الإدخال"><button class="${mode === 'smart' ? 'on' : ''}" data-act="entry-mode" data-v="smart">كتابة بكلامك</button><button class="${mode === 'manual' ? 'on' : ''}" data-act="entry-mode" data-v="manual">يدوي</button></div>`;
+  function entryModeSeg(mode, hideAcc) {
+    const accRow = hideAcc ? '' : `<div class="field col" style="margin-bottom:2px"><label>الحساب${ui.entryAcc ? '' : ' <span style="color:var(--red)">(اختار الحساب الأول)</span>'}</label><div class="pick hs">${accPick(ui.entryAcc || '', 'data-act="top-acc"')}</div></div>`;
+    return accRow + `<div class="seg" role="group" aria-label="طريقة الإدخال"><button class="${mode === 'smart' ? 'on' : ''}" data-act="entry-mode" data-v="smart">كتابة بكلامك</button><button class="${mode === 'manual' ? 'on' : ''}" data-act="entry-mode" data-v="manual">يدوي</button></div>`;
   }
   function entryHtml() {
     return `<div class="h" style="font-size:18px">إدخال مصروف أو دخل</div>${entryModeSeg('smart')}
@@ -153,7 +154,7 @@
   }
   function openManual() {
     const n = Date.now();
-    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, subManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: 'other', sub: '', acc: '', to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
+    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, subManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: 'other', sub: '', acc: ui.entryAcc || '', to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
   }
   function autoCat(sh) {
     if (!sh || sh.tx.type === 'xfer') return;
@@ -370,11 +371,11 @@
     const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
       ? `<div class="field col"><label>من</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col"><label>إلى</label><div class="pick hs">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
-      : `<div class="field col"><label>التصنيف</label><div class="pick hs" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div id="te_subwrap">${subRowHtml(sh)}</div><div class="field col"><label>الحساب${t.acc ? '' : ` <span style="color:var(--red)">(اختار الحساب)</span>`}</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
+      : `<div class="field col"><label>التصنيف</label><div class="pick hs" id="te_cat">${catPick(t.type, t.cat, 'data-act="te-pick" data-k="cat"')}</div></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div><div id="te_subwrap">${subRowHtml(sh)}</div>${sh.isNew ? '' : `<div class="field col"><label>الحساب</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`}`;
     const actions = sh.confirm
       ? `<div class="warn">متأكد إنك عايز تحذف العملية دي؟ رصيدك هيتعدّل.</div><div class="row"><button class="btn red grow" data-act="tx-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="tx-del-cancel">لا</button></div>`
-      : `<div class="row stick"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'إضافة' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
-    return `<div class="h" style="font-size:18px">${sh.isNew ? 'إدخال يدوي' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${sh.isNew ? entryModeSeg('manual') : ''}${typeSeg}
+      : `<div class="row stick"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'حفظ' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">${sh.isNew ? 'إلغاء' : 'إغلاق'}</button></div>`;
+    return `<div class="h" style="font-size:18px">${sh.isNew ? 'إدخال يدوي' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${sh.isNew ? entryModeSeg('manual', isX) : ''}${typeSeg}
       <div class="row2"><input id="te_amount" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}">${isX ? '' : `<input id="te_label" data-te="label" placeholder="الوصف (مثال: غدا)" aria-label="الوصف" value="${esc(t.label)}">`}</div>${fields}
       ${sh.isNew ? '' : `<div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
       <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>`}${actions}`;
@@ -546,7 +547,7 @@
     if (r.kind === 'transfer') { ui.draft = { kind: 'transfer', amount: r.amount, from: r.from, to: r.to, dateOffset: r.dateOffset }; render(); return; }
     const useAI = !!(S.settings.aiOn && S.settings.aiKey && (!r.items.length || r.items.some((it) => it.conf === 'low')));
     if (!r.items.length && !useAI) { toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف، مثلاً: 50 فطار'); return; }
-    r.items.forEach((it) => { it.acc = it.acc ? validAcc(it.acc) : ''; it.origCat = it.cat; it.origSub = it.sub || ''; });
+    r.items.forEach((it) => { it.acc = it.acc ? validAcc(it.acc) : (ui.entryAcc || ''); it.origCat = it.cat; it.origSub = it.sub || ''; });
     const token = uid();
     ui.draft = { kind: 'entry', items: r.items, dateOffset: r.dateOffset, ai: useAI ? 'pending' : '', token };
     render();
@@ -554,7 +555,7 @@
       aiParse(text).then((items) => {
         if (!ui.draft || ui.draft.token !== token) return;
         if (items && items.length) {
-          ui.draft.items = items.map((it) => ({ amount: it.amount, label: it.label, type: it.type, cat: it.cat, origCat: it.cat, acc: it.acc ? validAcc(it.acc) : '', conf: 'mid', sub: it.sub || '', origSub: it.sub || '' }));
+          ui.draft.items = items.map((it) => ({ amount: it.amount, label: it.label, type: it.type, cat: it.cat, origCat: it.cat, acc: it.acc ? validAcc(it.acc) : (ui.entryAcc || ''), conf: 'mid', sub: it.sub || '', origSub: it.sub || '' }));
           ui.draft.ai = 'done';
         } else { ui.draft.ai = r.items.length ? '' : 'error'; if (!r.items.length) { ui.draft = null; toast('ما لقيتش مبلغ. اكتب المبلغ مع الوصف.'); return; } }
         render();
@@ -765,7 +766,7 @@
   }
   function recurSheetFor(tx) {
     const every = suggestEvery(tx); const day = new Date().getDate();
-    return { type: 'recur', mode: 'ask', label: tx.label || '', amount: String(tx.amount), ttype: tx.type, cat: tx.cat, sub: tx.sub || '', acc: tx.acc, every, day, next: nextFrom(day, every || 1, 'ask'), confirm: false };
+    return { type: 'recur', mode: 'ask', txId: tx.id, label: tx.label || '', amount: String(tx.amount), ttype: tx.type, cat: tx.cat, sub: tx.sub || '', acc: tx.acc, every, day, next: nextFrom(day, every || 1, 'ask'), confirm: false };
   }
   // بعد حفظ عمليات: يربطها بدفعة موجودة، أو يفتح سؤال التكرار
   function afterSave(txs, payFor) {
@@ -816,9 +817,10 @@
       : (sh.mode === 'ask' ? '<div class="small">تمام، مرة واحدة. مش هسألك تاني عن نفس الوصف ده.</div>' : '<div class="warn">اختار التكرار (كل شهر أو كل 3 شهور...).</div>');
     let actions;
     if (sh.confirm) actions = '<div class="warn">متأكد إنك عايز تحذف الدفعة دي؟</div><div class="row"><button class="btn red grow" data-act="rc-del-do">نعم، احذف</button><button class="btn ghost grow" data-act="rc-del-cancel">لا</button></div>';
-    else if (sh.mode === 'ask') actions = '<div class="row stick"><button class="btn primary grow" data-act="rc-save">حفظ</button><button class="btn ghost grow" data-act="rc-skip-ask">تخطي</button></div>';
+    else if (sh.mode === 'ask') actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">حفظ</button><button class="btn ghost grow" data-act="rc-skip-ask">تخطي</button><button class="btn ghost grow" data-act="rc-cancel-ask" style="color:var(--red)">إلغاء</button></div>${sh.txId ? '<div class="small">"إلغاء" بيمسح العملية اللي لسه مسجلها. "تخطي" بيسيبها زي ما هي من غير تكرار.</div>' : ''}`;
     else actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">${sh.mode === 'new' ? 'إضافة' : 'حفظ'}</button>${sh.mode === 'edit' ? '<button class="btn red" data-act="rc-del-ask">حذف</button>' : ''}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
-    return `<div class="h" style="font-size:18px">${title}</div>${typeSeg}${presets}
+    const backBtn = sh.mode === 'ask' ? '<button class="xbtn" data-act="rc-skip-ask" aria-label="رجوع" style="font-size:22px">→</button>' : '';
+    return `<div class="row" style="gap:6px;align-items:center">${backBtn}<div class="h" style="font-size:18px">${title}</div></div>${typeSeg}${presets}
       <div class="row2"><input id="rc_amount" data-rc="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(sh.amount)}"><input id="rc_label" data-rc="label" aria-label="الوصف" value="${esc(sh.label)}" placeholder="الوصف: كهرباء / رخصة"></div>
       <div class="field col"><label>بيتكرر كل قد إيه؟</label><div class="pick hs">${pickHtml(everyList(sh.mode), String(sh.every), 'data-act="rc-every"')}</div></div>${more}${actions}`;
   }
@@ -1026,6 +1028,7 @@
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
       case 'te-pick': { const sh = ui.sheet; const k = el.dataset.k; sh.tx[k] = el.dataset.v; if (k === 'cat') { sh.catManual = true; sh.hint = ''; if (sh.tx.sub && !engine.subsOf(sh.tx.cat).some((x) => x.id === sh.tx.sub)) sh.tx.sub = ''; } if (k === 'sub') sh.subManual = true; render(); break; }
       case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat' && it.sub && !engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; render(); break; }
+      case 'top-acc': { ui.entryAcc = el.dataset.v; const sh = ui.sheet; if (sh && sh.type === 'tx' && sh.isNew) sh.tx.acc = ui.entryAcc; if (ui.draft && ui.draft.items) ui.draft.items.forEach((it) => { if (!it.acc) it.acc = ui.entryAcc; }); render(); break; }
       case 'pay-tab': ui.payTab = el.dataset.v; render(); break;
       case 'pay-do': payDo(el.dataset.k); break;
       case 'pay-pin': payPin(el.dataset.k); break;
@@ -1045,7 +1048,8 @@
       case 'pn-acc': ui.sheet.acc = el.dataset.v; render(); break;
       case 'pn-ok': payNowConfirm(); break;
       case 'pn-skip': { const r = recOf(ui.sheet.id); ui.sheet = null; if (r) { const was1 = r.every === 'once'; advanceRec(r); render(); toast(was1 ? 'اتشال التذكير' : `اتخطت الدورة دي. الميعاد الجاي ${dLabel(r.next)}`); } else render(); break; }
-      case 'rc-skip-ask': recNext(); break;
+      case 'rc-skip-ask': { if (!ui.sheet.txId && !(ui.recQueue || []).length) { ui.sheet = null; render(); } else recNext(); break; }
+      case 'rc-cancel-ask': { const id = ui.sheet.txId; if (id) { S.txs = S.txs.filter((t) => t.id !== id); save(); toast('اتلغت العملية'); } recNext(); if (id && !ui.toast) toast('اتلغت العملية'); break; }
       case 'rc-del-ask': ui.sheet.confirm = true; render(); break;
       case 'rc-del-cancel': ui.sheet.confirm = false; render(); break;
       case 'rc-del-do': { const id = ui.sheet.id; S.recurring = S.recurring.filter((r) => r.id !== id); save(); scheduleRecur(); ui.sheet = null; render(); toast('اتحذفت الدفعة المتكررة'); break; }
@@ -1084,7 +1088,7 @@
       case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
       case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, catManual: false, subManual: false, hint: '', tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
       case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type !== 'xfer') autoCat(ui.sheet); if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = accIds().find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; if (!engine.subsOf(t1.cat).some((x) => x.id === t1.sub)) t1.sub = ''; render(); break; }
-      case 'add-tx': ui.draft = null; openManual(); render(); setTimeout(() => { const i = document.getElementById('te_amount'); if (i) i.focus(); }, 60); break;
+      case 'add-tx': ui.entryAcc = ''; ui.draft = null; openManual(); render(); setTimeout(() => { const i = document.getElementById('te_amount'); if (i) i.focus(); }, 60); break;
       case 'entry-mode': if (el.dataset.v === 'manual') openManual(); else ui.sheet = { type: 'entry' }; render(); break;
       case 'theme-toggle': { const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
       case 'tx-save': saveTx(); break;
