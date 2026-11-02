@@ -186,3 +186,52 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .sheet .row.stick{position:sticky;bottom:calc(-12px - env(safe-area-inset-bottom));background:var(--bg);padding:8px 0 calc(6px + env(safe-area-inset-bottom));z-index:2;border-top:1px solid var(--line)}
 
 .dayhead{display:flex;align-items:center;gap:10px;padding:8px 4px 2px;font-size:14px;white-space:nowrap}.dayhead b{flex:1;font-weight:800;overflow:hidden;text-overflow:ellipsis}.dayhead .neg,.dayhead .pos{font-weight:800;font-size:13.5px}
+
+/* ===== التصميمات (يختارها المستخدم من الإعدادات) ===== */
+:root[data-skin="night"]{
+  color-scheme:dark;
+  --bg:#0E1424; --ink:#EAF0FF; --mute:#9AA7C7; --card:#161E33; --line:#26314D;
+  --accent:#3DD6B0; --accent-soft:#12302B; --teal:#3DD6B0; --red:#FF7A6B; --purple:#8EA8FF;
+  --accentf:#0F8F76; --tealf:#0F8F76; --redf:#C8453A; --purplef:#4C63D6;
+  --o1:rgba(255,122,107,.28);--o2:rgba(255,122,107,.55);--o3:#FF7A6B;--ot3:#0E1424;--ot1:#EAF0FF;--inc:#3DD6B0;
+  --d0:#161E33; --dt0:#EAF0FF; --d1:#12302B; --dt1:#EAF0FF; --d2:#1E6B5C; --dt2:#FFFFFF; --d3:#3DD6B0; --dt3:#06231C;
+  font-family:'IBM Plex Sans Arabic','Cairo','Segoe UI',system-ui,sans-serif;
+}
+:root[data-skin="night"] body,:root[data-skin="night"] button,:root[data-skin="night"] input,:root[data-skin="night"] textarea{font-family:'IBM Plex Sans Arabic','Cairo','Segoe UI',system-ui,sans-serif}
+:root[data-skin="night"] .acard.cash{background:#0F8F76}:root[data-skin="night"] .acard.wallet{background:#3F5BD9}:root[data-skin="night"] .acard.insta{background:#B7681F}
+:root[data-skin="night"] .card,:root[data-skin="night"] .tx{border-radius:16px}
+
+:root[data-skin="clean"]{
+  color-scheme:light;
+  --bg:#F3F5F7; --ink:#0B1B2B; --mute:#4B5B6B; --card:#FFFFFF; --line:#DDE3E9;
+  --accent:#0B7F58; --accent-soft:#E3F6EE; --teal:#0B7F58; --red:#C0262D; --purple:#2563EB;
+  --accentf:#0B7F58; --tealf:#0B7F58; --redf:#C0262D; --purplef:#2563EB;
+  --o1:rgba(192,38,45,.22);--o2:rgba(192,38,45,.5);--o3:#C0262D;--ot3:#fff;--ot1:#0B1B2B;--inc:#0B7F58;
+  --d0:#EEF1F4; --dt0:#0B1B2B; --d1:#E3F6EE; --dt1:#0B1B2B; --d2:#8ED9B8; --dt2:#0B1B2B; --d3:#0B7F58; --dt3:#FFFFFF;
+}
+:root[data-skin="clean"] .acard.cash{background:#0B7F58}:root[data-skin="clean"] .acard.wallet{background:#2563EB}:root[data-skin="clean"] .acard.insta{background:#B45309}
+:root[data-skin="clean"] .acard{box-shadow:none}
+:root[data-skin="clean"] .tabs div{border-radius:22px;box-shadow:0 6px 18px rgba(11,27,43,.08)}
+
+:root[data-skin="bold"]{
+  color-scheme:light;
+  --bg:#EFEAFF; --ink:#16112B; --mute:#4A4268; --card:#FFFFFF; --line:#16112B;
+  --accent:#6C4CF1; --accent-soft:#E4DDFF; --teal:#0A7A4B; --red:#C4162A; --purple:#6C4CF1;
+  --accentf:#6C4CF1; --tealf:#0A7A4B; --redf:#C4162A; --purplef:#6C4CF1;
+  --o1:rgba(196,22,42,.22);--o2:rgba(196,22,42,.5);--o3:#C4162A;--ot3:#fff;--ot1:#16112B;--inc:#0A7A4B;
+  --d0:#F6F3FF; --dt0:#16112B; --d1:#E4DDFF; --dt1:#16112B; --d2:#B7A6FF; --dt2:#16112B; --d3:#6C4CF1; --dt3:#FFFFFF;
+}
+:root[data-skin="bold"] body,:root[data-skin="bold"] button,:root[data-skin="bold"] input,:root[data-skin="bold"] textarea{font-family:'Readex Pro','Cairo','Segoe UI',system-ui,sans-serif}
+:root[data-skin="bold"] .acard.cash{background:#0A7A4B}:root[data-skin="bold"] .acard.wallet{background:#D6336C}:root[data-skin="bold"] .acard.insta{background:#6C4CF1}
+:root[data-skin="bold"] .card,:root[data-skin="bold"] .acard,:root[data-skin="bold"] .tile,:root[data-skin="bold"] .tx{border:2px solid var(--ink);box-shadow:3px 3px 0 var(--ink)}
+:root[data-skin="bold"] .btn,:root[data-skin="bold"] .pk,:root[data-skin="bold"] .seg,:root[data-skin="bold"] .tabs div{border:2px solid var(--ink)}
+:root[data-skin="bold"] .btn.primary,:root[data-skin="bold"] .btn.teal,:root[data-skin="bold"] .btn.red{box-shadow:2px 2px 0 var(--ink)}
+:root[data-skin="bold"] .tabs{border-top:2px solid var(--ink)}
+
+/* اختيار التصميم في الإعدادات */
+.skins{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.skinbtn{border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:6px;text-align:right;min-height:84px}
+.skinbtn.on{border-color:var(--accent);background:var(--accent-soft)}
+.skinbtn b{font-size:14px}
+.skinbtn .dots{display:flex;gap:4px}
+.skinbtn .dots i{width:18px;height:18px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.18)}

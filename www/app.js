@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.18.2';
+  const APP_VERSION = '1.19.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -340,9 +340,12 @@
         <div class="small">ضيف أكتر من محفظة أو انستا باي أو بنك، وعدّل أو احذف أي حساب.</div>
         <div class="chips">${S.accounts.map((a) => `<button class="chip" style="color:var(--ink);display:inline-flex;gap:6px;align-items:center" data-act="acc-edit" data-id="${a.id}"><span style="width:10px;height:10px;border-radius:50%;background:${a.color};display:inline-block"></span>${esc(a.name)}</button>`).join('')}</div>
         <button class="btn primary" data-act="acc-new">+ حساب جديد</button></div>
-      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المظهر</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">التصميم</div>
+        <div class="skins" role="group" aria-label="التصميم">${SKINS.map((x) => `<button class="skinbtn${curSkin() === x.id ? ' on' : ''}" data-act="skin" data-v="${x.id}"><span class="dots">${x.dots.map((d) => `<i style="background:${d}"></i>`).join('')}</span><b>${x.name}</b><span class="small">${x.sub}</span></button>`).join('')}</div>
+        <div class="small">اختار الشكل اللي يريحك. الاختيار بيتحفظ على موبايلك بس، والبيانات والخدمات واحدة في كل التصميمات.</div></div>
+      ${curSkin() !== 'classic' ? '' : `<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المظهر</div>
         <div class="seg" role="group" aria-label="المظهر"><button class="${(st.theme || 'auto') === 'auto' ? 'on' : ''}" data-act="theme" data-v="auto">تلقائي</button><button class="${st.theme === 'light' ? 'on' : ''}" data-act="theme" data-v="light">فاتح</button><button class="${st.theme === 'dark' ? 'on' : ''}" data-act="theme" data-v="dark">داكن</button></div>
-        <div class="small">"تلقائي" يمشي مع وضع الموبايل.</div></div>
+        <div class="small">"تلقائي" يمشي مع وضع الموبايل.</div></div>`}
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">التصنيفات</div>
         <div class="small">اضغط على تصنيف لتغيير اسمه أو لونه أو الكلمات اللي بتتصنف تحته.</div>
         <div class="small" style="margin-top:2px">المصروفات</div><div class="chips">${engine.catsOut().map(catChipBtn).join('')}</div>
@@ -681,10 +684,18 @@
     applyCat((cfg) => { cfg.custom.push({ id, name, color: sh.color, type: sh.ctype, words }); });
     ui.sheet = { type: 'cat', id, filter: '', confirm: false, moveTo: 'other' }; render(); toast('اتضاف التصنيف');
   }
+  const SKINS = [
+    { id: 'classic', name: 'الأصلي', sub: 'دافئ بلمسة برتقالي', dots: ['#FFF8F0', '#B84A0B', '#0B6E6E'] },
+    { id: 'night', name: 'ليلي هادئ', sub: 'داكن بأخضر مائي', dots: ['#0E1424', '#3DD6B0', '#FF7A6B'] },
+    { id: 'clean', name: 'فاتح نقي', sub: 'بسيط وواضح', dots: ['#F3F5F7', '#0B7F58', '#2563EB'] },
+    { id: 'bold', name: 'جريء ملوّن', sub: 'حدود سميكة وألوان قوية', dots: ['#EFEAFF', '#6C4CF1', '#FFE14D'] },
+  ];
+  const curSkin = () => (SKINS.some((x) => x.id === S.settings.skin) ? S.settings.skin : 'classic');
   function applyTheme() {
     const th = S.settings.theme || 'auto'; document.documentElement.setAttribute('data-theme', th);
     const dark = th === 'dark' || (th === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', dark ? '#1A130D' : '#FFF8F0');
+    const sk = SKINS.some((x) => x.id === S.settings.skin) ? S.settings.skin : 'classic'; document.documentElement.setAttribute('data-skin', sk);
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', sk === 'night' ? '#0E1424' : sk === 'clean' ? '#F3F5F7' : sk === 'bold' ? '#EFEAFF' : (dark ? '#1A130D' : '#FFF8F0'));
   }
   async function checkUpdate() {
     if (!/^https?:/.test(location.protocol)) return;
@@ -1091,11 +1102,12 @@
       case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type !== 'xfer') autoCat(ui.sheet); if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = accIds().find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; if (!engine.subsOf(t1.cat).some((x) => x.id === t1.sub)) t1.sub = ''; render(); break; }
       case 'add-tx': ui.entryAcc = ''; ui.draft = null; openManual(); render(); setTimeout(() => { const i = document.getElementById('te_amount'); if (i) i.focus(); }, 60); break;
       case 'entry-mode': if (el.dataset.v === 'manual') openManual(); else ui.sheet = { type: 'entry' }; render(); break;
-      case 'theme-toggle': { const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
+      case 'theme-toggle': { if (curSkin() !== 'classic') { toast('المظهر بيتحدد من التصميم. غيّره من الإعدادات'); break; } const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
       case 'tx-save': saveTx(); break;
       case 'tx-del-ask': ui.sheet.confirm = true; render(); break;
       case 'tx-del-cancel': ui.sheet.confirm = false; render(); break;
       case 'tx-del-do': S.txs = S.txs.filter((t) => t.id !== ui.sheet.id); ui.sheet = null; save(); render(); toast('اتحذفت العملية'); break;
+      case 'skin': S.settings.skin = el.dataset.v; save(); applyTheme(); render(); toast('اتغيّر التصميم'); break;
       case 'theme': S.settings.theme = el.dataset.v; save(); applyTheme(); render(); break;
       case 'whatsnew': S.settings.seenVersion = APP_VERSION; save(); ui.sheet = { type: 'whatsnew' }; render(); checkUpdate(); break;
       case 'cat-open': ui.sheet = { type: 'cat', id: el.dataset.id, filter: '', confirm: false, moveTo: 'other' }; render(); break;
