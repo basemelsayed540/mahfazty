@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.19.0';
+  const APP_VERSION = '1.20.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -506,6 +506,10 @@
       body = payNowHtml(sh);
     } else if (sh.type === 'recur') {
       body = recurSheetHtml(sh);
+    } else if (sh.type === 'nextdate') {
+      body = nextDateHtml(sh);
+    } else if (sh.type === 'snooze') {
+      body = snoozeHtml(sh);
     } else if (sh.type === 'accedit') {
       body = accEditHtml(sh);
     } else if (sh.type === 'newacc') {
@@ -745,18 +749,22 @@
 
   /* ---------- المدفوعات المتكررة ---------- */
   const EVERY = [{ id: '0', name: 'مرة واحدة' }, { id: 'd', name: 'كل يوم' }, { id: 'w', name: 'كل أسبوع' }, { id: '1', name: 'كل شهر' }, { id: '3', name: 'كل 3 شهور' }, { id: '6', name: 'كل 6 شهور' }, { id: '12', name: 'كل سنة' }];
-  const everyList = (mode) => (mode === 'ask' ? EVERY : [{ id: 'once', name: 'مرة واحدة' }].concat(EVERY.filter((x) => x.id !== '0'), [{ id: '24', name: 'كل سنتين' }, { id: '60', name: 'كل 5 سنين' }, { id: '120', name: 'كل 10 سنين' }]));
+  const everyList = (mode) => (mode === 'ask' ? EVERY : [{ id: 'pick', name: 'أحدد الميعاد الجاي بنفسي' }, { id: 'once', name: 'مرة واحدة' }].concat(EVERY.filter((x) => x.id !== '0'), [{ id: '24', name: 'كل سنتين' }, { id: '60', name: 'كل 5 سنين' }, { id: '120', name: 'كل 10 سنين' }]));
   const LEADS = [{ id: '3', name: '3 أيام' }, { id: '7', name: 'أسبوع' }, { id: '14', name: 'أسبوعين' }, { id: '30', name: 'شهر' }];
-  const getPresets = () => (Array.isArray(S.presets) ? S.presets : PRESETS.map((n) => ({ n, every: 12, lead: 30, amount: 0 })));
-  const PRESETS = ['تجديد رخصة القيادة', 'تجديد رخصة السيارة', 'تجديد رخصة الدراجة', 'تجديد البطاقة الشخصية', 'تجديد جواز السفر', 'تأمين السيارة', 'فحص السيارة'];
+  const getPresets = () => (Array.isArray(S.presets) ? S.presets : PRESETS.map((n) => ({ n, every: 'pick', lead: 30, amount: 0 })));
+  const PRESETS = ['جمعية', 'باقة الانترنت', 'تجديد رخصة القيادة', 'تجديد رخصة السيارة', 'تجديد رخصة الدراجة', 'تجديد البطاقة الشخصية', 'تجديد جواز السفر', 'تأمين السيارة', 'فحص السيارة'];
   const isStep = (e) => e === 'd' || e === 'w';
   const stepDays = (e) => (e === 'd' ? 1 : 7);
   const askMode = () => (S.settings.askRecur === 'smart' ? 'smart' : 'always');
-  const everyName = (n) => (n === 'once' ? 'مرة واحدة' : n === 'd' ? 'كل يوم' : n === 'w' ? 'كل أسبوع' : n === 1 ? 'كل شهر' : n === 24 ? 'كل سنتين' : (n > 12 && n % 12 === 0) ? `كل ${n / 12} سنين` : n === 12 ? 'كل سنة' : `كل ${n} شهور`);
+  const everyName = (n) => (n === 'pick' ? 'ميعاد أحدده' : n === 'once' ? 'مرة واحدة' : n === 'd' ? 'كل يوم' : n === 'w' ? 'كل أسبوع' : n === 1 ? 'كل شهر' : n === 24 ? 'كل سنتين' : (n > 12 && n % 12 === 0) ? `كل ${n / 12} سنين` : n === 12 ? 'كل سنة' : `كل ${n} شهور`);
   const mkDate = (y, m, d) => { const dim = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(d, dim)); };
   const dLabel = (ts) => { const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
   const recKey = (x) => norm1(x.label) || (x.cat + '|' + (x.sub || ''));
   const recOf = (id) => S.recurring.find((r) => r.id === id);
+  const effDue = (r) => (r.pend ? 8e15 : (r.snz && r.snz > 0 ? r.snz : r.next));
+  const jamLeft = (r) => (r.jam ? Math.max(0, r.jam.total - r.jam.paid) : 0);
+  const jamText = (r) => { const j = r.jam; if (!j) return ''; const left = jamLeft(r); return `جمعية: قسط ${Math.min(j.paid + 1, j.total)} من ${j.total} · ${left === 1 ? 'فاضل شهر واحد' : left === 2 ? 'فاضل شهرين' : left <= 10 ? 'فاضل ' + left + ' شهور' : 'فاضل ' + left + ' شهر'}`; };
+  const jamPaysHtml = (r) => { const p = (r.jam && r.jam.pays) || []; if (!p.length) return ''; return `<div class="small" style="line-height:1.9">${p.map((x, i) => `قسط ${i + 1}: اتدفع يوم ${dLabel(x.ts)}${x.amt > 0 ? ' · ' + fmt(x.amt) : ''}`).join('<br>')}</div>`; };
   const MONTHLY_WORDS = /ايجار|قسط|اشتراك|كهرب|نور|ميه|مياه|غاز|انترنت|نت |واي ?فاي|فاتور|تليفون|موبايل|خط|جمعي|حضان|مدرس|مصاريف دراس|راتب|مرتب|معاش|ماهي/;
   function suggestEvery(x) {
     if (x.type === 'in') return x.cat === 'salary' ? 1 : 0;
@@ -764,18 +772,37 @@
     return 0;
   }
   function nextFrom(day, every, mode, base) {
-    if (every === 'once') return base || startOfDay(Date.now());
+    if (every === 'once' || every === 'pick') return base || startOfDay(Date.now());
     if (isStep(every)) { const t0 = startOfDay(Date.now()); return mode === 'ask' ? PE.addDays(t0, stepDays(every)) : t0; }
     const n = new Date(); if (mode === 'ask') return mkDate(n.getFullYear(), n.getMonth() + (every || 1), day).getTime();
     let t = mkDate(n.getFullYear(), n.getMonth(), day).getTime(); if (t < startOfDay(Date.now())) t = mkDate(n.getFullYear(), n.getMonth() + 1, day).getTime(); return base && base > t ? base : t;
   }
-  function advanceRec(r) {
+  function advanceRec(r, tx) {
+    r.snz = 0;
+    if (r.jam && tx) {
+      r.jam.pays = r.jam.pays || []; r.jam.pays.push({ ts: tx.ts, amt: tx.amount }); r.jam.paid += 1;
+      if (r.jam.paid >= r.jam.total) { r.jamDone = true; S.recurring = S.recurring.filter((x) => x.id !== r.id); save(); scheduleRecur(); return; }
+    }
+    if (r.every === 'pick') { r.pend = true; save(); scheduleRecur(); return; }
     if (r.every === 'once') { S.recurring = S.recurring.filter((x) => x.id !== r.id); save(); scheduleRecur(); return; }
     let guard = 0;
     if (isStep(r.every)) { do { r.next = PE.addDays(r.next, stepDays(r.every)); guard++; } while (r.next < startOfDay(Date.now()) && guard < 800); }
     else do { const d = new Date(r.next); r.next = mkDate(d.getFullYear(), d.getMonth() + r.every, r.day).getTime(); guard++; } while (r.next < startOfDay(Date.now()) && guard < 60);
     save(); scheduleRecur();
   }
+  function nextDateSheet(r) { return { type: 'nextdate', id: r.id, label: r.label || catOf(r.cat).name, date: '' }; }
+  function nextDateHtml(sh) {
+    return `<div class="h" style="font-size:18px">ميعاد الدفع الجاي: ${esc(sh.label)}</div><div class="small">اختار التاريخ اللي هتجدد أو تدفع فيه المرة الجاية، وهفكّرك قبله.</div>
+      <div class="field col"><label for="nd_date">التاريخ</label><input id="nd_date" type="date" data-nd="date" min="${ymd(Date.now())}" value="${esc(sh.date)}"></div>
+      <div class="row stick"><button class="btn primary grow" data-act="nd-save">حفظ الميعاد</button><button class="btn ghost" data-act="nd-none" style="color:var(--red)">مفيش ميعاد جاي (احذفه)</button></div><div class="row"><button class="btn ghost grow" data-act="close">أحدده بعدين</button></div>`;
+  }
+  function snoozeHtml(sh) {
+    return `<div class="h" style="font-size:18px">تأجيل: ${esc(sh.label)}</div><div class="small">هفكّرك تاني في الميعاد الجديد، وباقي المواعيد بتفضل زي ما هي.</div>
+      <div class="row"><button class="btn primary grow" data-act="sz-do" data-d="1">بكرة</button><button class="btn primary grow" data-act="sz-do" data-d="7">بعد أسبوع</button></div>
+      <div class="field col"><label for="sz_date">أو اختار تاريخ</label><input id="sz_date" type="date" data-sz="date" min="${ymd(Date.now() + DAY)}" value="${esc(sh.date)}"></div>
+      <div class="row stick"><button class="btn primary grow" data-act="sz-date">تأجيل للتاريخ ده</button><button class="btn ghost" data-act="close">إلغاء</button></div>`;
+  }
+  const parseYmd = (v) => { const q = String(v || '').split('-').map(Number); if (q.length !== 3 || !q[0]) return NaN; return new Date(q[0], q[1] - 1, q[2]).getTime(); };
   function recurSheetFor(tx) {
     const every = suggestEvery(tx); const day = new Date().getDate();
     return { type: 'recur', mode: 'ask', txId: tx.id, label: tx.label || '', amount: String(tx.amount), ttype: tx.type, cat: tx.cat, sub: tx.sub || '', acc: tx.acc, every, day, next: nextFrom(day, every || 1, 'ask'), confirm: false };
@@ -788,7 +815,12 @@
       const vn = varNote(tx); if (vn) warn = warn ? warn + ' · ' + vn : vn;
       const pr = payFor ? recOf(payFor) : null;
       const r = pr || S.recurring.find((x) => x.type === tx.type && ((norm1(tx.label) && x.key === norm1(tx.label)) || (tx.sub && x.sub === tx.sub && x.cat === tx.cat)));
-      if (r) { if (pr || r.next <= Date.now() + 10 * DAY) { const was1 = r.every === 'once'; advanceRec(r); note = was1 ? 'اتشال التذكير بعد الدفع' : `الميعاد الجاي ${dLabel(r.next)}`; } return; }
+      if (r) { if (pr || effDue(r) <= Date.now() + 10 * DAY) {
+          const was1 = r.every === 'once'; const isPick = r.every === 'pick'; advanceRec(r, tx);
+          if (r.jam) note = r.jamDone ? `اتسجل القسط الأخير يوم ${dLabel(tx.ts)}. خلصت الجمعية 🎉` : `اتسجل قسط ${r.jam.paid} من ${r.jam.total} يوم ${dLabel(tx.ts)} · ${jamLeft(r) === 1 ? 'فاضل شهر' : 'فاضل ' + jamLeft(r) + ' شهور'} · الميعاد الجاي ${dLabel(r.next)}`;
+          else if (isPick) { note = 'حدد الميعاد الجاي'; ui.sheet = nextDateSheet(r); }
+          else note = was1 ? 'اتشال التذكير بعد الدفع' : `الميعاد الجاي ${dLabel(r.next)}`;
+        } return; }
       const am = askMode();
       if (am === 'smart' && !suggestEvery(tx)) return;
       const k = recKey(tx); if (S.noRecur[k]) return;
@@ -816,9 +848,16 @@
     const title = sh.mode === 'ask' ? (isOut ? 'هل المبلغ ده بيتدفع بشكل متكرر؟' : 'هل الدخل ده بيتكرر؟') : sh.mode === 'edit' ? 'تعديل التذكير' : 'تذكير جديد';
     const [hh, mm] = (S.settings.recurTime || '09:00').split(':'); const tt = timeStr(new Date(2000, 0, 1, +hh || 0, +mm || 0).getTime());
     const typeSeg = sh.mode === 'new' ? `<div class="seg" role="group" aria-label="النوع"><button class="${sh.ttype === 'out' ? 'on' : ''}" data-act="rc-type" data-v="out">مصروف</button><button class="${sh.ttype === 'in' ? 'on' : ''}" data-act="rc-type" data-v="in">دخل</button></div>` : '';
+    const kindSeg = sh.mode === 'ask' ? '' : `<div class="seg" role="group" aria-label="نوع التذكير"><button class="${sh.jam ? '' : 'on'}" data-act="rc-kind" data-v="n">تذكير عادي</button><button class="${sh.jam ? 'on' : ''}" data-act="rc-kind" data-v="j">جمعية</button></div>`;
     const lead = sh.mode === 'ask' ? '' : `<div class="field col"><label>فكّرني قبل الميعاد بـ</label><div class="pick hs">${pickHtml(LEADS, String(sh.lead || 3), 'data-act="rc-lead"')}</div></div>`;
     const presets = sh.mode === 'new' ? `<div class="field col"><label>${ui.presetEdit ? 'اضغط على أي اختيار لحذفه' : 'اختار حاجة من قايمتك أو اكتب بنفسك'}</label><div class="pick hs">${getPresets().map((x, i) => `<button type="button" class="pk" data-act="${ui.presetEdit ? 'rc-preset-del' : 'rc-preset'}" data-i="${i}">${ui.presetEdit ? '<span style="color:var(--red)">✕</span> ' : ''}${esc(x.n)}</button>`).join('') || '<span class="small">القايمة فاضية. اكتب اسم تذكير واحفظه.</span>'}</div><div class="row"><button type="button" class="btn ghost grow" data-act="rc-preset-save">+ احفظ التذكير ده في قايمتي</button><button type="button" class="btn ghost" data-act="rc-preset-edit">${ui.presetEdit ? 'تم' : '✎ تعديل القايمة'}</button></div></div>` : '';
-    const more = sh.every === 'once'
+    const jamBox = `<div class="field col"><label for="rc_jtotal">عدد شهور الجمعية</label><input id="rc_jtotal" type="number" min="1" max="120" inputmode="numeric" data-rc="jtotal" value="${esc(sh.jtotal || '')}" placeholder="مثلاً 10"></div>
+         <div class="field col"><label for="rc_day">يوم القسط من الشهر (1 إلى 31)</label><input id="rc_day" type="number" min="1" max="31" inputmode="numeric" data-rc="day" value="${sh.day}"></div>
+         <div class="field col"><label for="rc_next">ميعاد القسط الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}
+         <div class="ok">كل شهر في ميعاد القسط هفكّرك: "عليك جمعية، دفعتها؟". تقدر تأجلها يوم أو أسبوع أو لتاريخ تختاره، ولما تدفع هسجل تاريخ الدفع وأقولك فاضل كام شهر.</div>${sh.id && sh.paid ? `<div class="small">اتدفع ${sh.paid} من ${sh.jtotal || '؟'} أقساط.</div>` : ''}`;
+    const more = sh.jam ? jamBox : sh.every === 'pick'
+      ? `<div class="field col"><label for="rc_next">ميعاد ${what} (اختاره بنفسك)</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}<div class="ok">بعد ما تدفع هسألك: الميعاد الجاي إمتى؟ فمفيش تكرار تلقائي عشوائي.</div>`
+      : sh.every === 'once'
       ? `<div class="field col"><label for="rc_next">ميعاد ${what}</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}<div class="ok">هفكّرك قبل الميعاد وفي يومه الساعة ${tt}، وهتختار الحساب وتأكد المبلغ وقتها.</div>`
       : isStep(sh.every)
       ? `<div class="field col"><label for="rc_next">ميعاد ${what} الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div><div class="ok">هفكّرك ${sh.every === 'd' ? 'كل يوم' : 'كل أسبوع في نفس اليوم'} الساعة ${tt}.</div>`
@@ -832,9 +871,9 @@
     else if (sh.mode === 'ask') actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">حفظ</button><button class="btn ghost grow" data-act="rc-skip-ask">تخطي</button><button class="btn ghost grow" data-act="rc-cancel-ask" style="color:var(--red)">إلغاء</button></div>${sh.txId ? '<div class="small">"إلغاء" بيمسح العملية اللي لسه مسجلها. "تخطي" بيسيبها زي ما هي من غير تكرار.</div>' : ''}`;
     else actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">${sh.mode === 'new' ? 'إضافة' : 'حفظ'}</button>${sh.mode === 'edit' ? '<button class="btn red" data-act="rc-del-ask">حذف</button>' : ''}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
     const backBtn = sh.mode === 'ask' ? '<button class="xbtn" data-act="rc-skip-ask" aria-label="رجوع" style="font-size:22px">→</button>' : '';
-    return `<div class="row" style="gap:6px;align-items:center">${backBtn}<div class="h" style="font-size:18px">${title}</div></div>${typeSeg}${presets}
+    return `<div class="row" style="gap:6px;align-items:center">${backBtn}<div class="h" style="font-size:18px">${title}</div></div>${typeSeg}${kindSeg}${presets}
       <div class="row2"><input id="rc_amount" data-rc="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(sh.amount)}"><input id="rc_label" data-rc="label" aria-label="الوصف" value="${esc(sh.label)}" placeholder="الوصف: كهرباء / رخصة"></div>
-      <div class="field col"><label>بيتكرر كل قد إيه؟</label><div class="pick hs">${pickHtml(everyList(sh.mode), String(sh.every), 'data-act="rc-every"')}</div></div>${more}${actions}`;
+      ${sh.jam ? '' : `<div class="field col"><label>بيتكرر كل قد إيه؟</label><div class="pick hs">${pickHtml(everyList(sh.mode), String(sh.every), 'data-act="rc-every"')}</div></div>`}${more}${sh.jam && sh.id ? jamPaysHtml(recOf(sh.id) || {}) : ''}${actions}`;
   }
   function payNowHtml(sh) {
     const isIn = sh.ttype === 'in'; const nm = sh.label || catOf(sh.cat).name; const rec = sh.src === 'rec';
@@ -849,13 +888,13 @@
     if (!sh.acc) { toast('اختار الحساب الأول: نقدي أو محفظة أو انستا...'); return; }
     const tx = { id: uid(), ts: Date.now(), type: sh.ttype, amount, label: sh.label || '', cat: sh.cat, acc: sh.acc, sub: sh.sub || '' };
     S.txs.push(tx); S.settings.lastAcc = sh.acc;
-    if (sh.src === 'rec') { const r = recOf(sh.id); if (r && (r.every === 'once' || (typeof r.every === 'number' && r.every >= 12)) && amount !== r.amount) r.amount = amount; }
+    if (sh.src === 'rec') { const r = recOf(sh.id); if (r && (r.every === 'once' || r.every === 'pick' || (typeof r.every === 'number' && r.every >= 12)) && amount !== r.amount) r.amount = amount; }
     save(); ui.sheet = null; const note = afterSave(tx, sh.src === 'rec' ? sh.id : null);
     toast([sh.ttype === 'in' ? 'اتسجل الاستلام' : 'اتسجل الدفع', note].filter(Boolean).join(' · '));
   }
   function rcSet(el, commit) {
     const sh = ui.sheet; if (!sh || sh.type !== 'recur') return; const k = el.dataset.rc;
-    if (k === 'label') sh.label = el.value; else if (k === 'amount') sh.amount = el.value;
+    if (k === 'label') sh.label = el.value; else if (k === 'amount') sh.amount = el.value; else if (k === 'jtotal') sh.jtotal = el.value;
     if (!commit) return;
     if (k === 'day') { const d = Math.min(31, Math.max(1, parseInt(toDigits(el.value), 10) || 1)); sh.day = d; const cur = new Date(sh.next); let nt = mkDate(cur.getFullYear(), cur.getMonth(), d).getTime(); if (sh.mode !== 'ask' && nt < startOfDay(Date.now())) nt = mkDate(cur.getFullYear(), cur.getMonth() + 1, d).getTime(); sh.next = nt; render(); }
     if (k === 'next' && el.value) { const q = el.value.split('-').map(Number); const nt = new Date(q[0], q[1] - 1, q[2]).getTime(); if (!isNaN(nt)) { sh.next = nt; sh.day = new Date(nt).getDate(); render(); } }
@@ -868,8 +907,10 @@
       return;
     }
     if (sh.mode === 'new' && !label) { toast('اكتب وصف للدفعة'); return; }
+    const jtotal = parseInt(toDigits(sh.jtotal), 10);
+    if (sh.jam) { if (!(jtotal >= 1)) { toast('اكتب عدد شهور الجمعية'); return; } sh.every = 1; }
     let next = sh.next; let guard = 0;
-    if (sh.every === 'once') { /* بيفضل في تاريخه حتى لو فات، وهيظهر متأخر */ }
+    if (sh.every === 'once' || sh.every === 'pick') { /* بيفضل في تاريخه حتى لو فات، وهيظهر متأخر */ }
     else if (isStep(sh.every)) { while (next < startOfDay(Date.now()) && guard++ < 800) next = PE.addDays(next, stepDays(sh.every)); }
     else while (next < startOfDay(Date.now()) && guard++ < 60) { const d = new Date(next); next = mkDate(d.getFullYear(), d.getMonth() + sh.every, sh.day).getTime(); }
     let cat = sh.cat; let sub = sh.sub; let acc = validAcc(sh.acc);
@@ -877,22 +918,23 @@
       const pk = engine.pick(engine.scoreLabel(label).score, null, sh.ttype); cat = pk.cat; const sm = engine.matchSub(label, cat, sh.ttype, pk.conf === 'low'); sub = ''; if (sm) { cat = sm.cat; sub = sm.sub; } acc = validAcc(S.settings.lastAcc);
     }
     const data = { label, amount, type: sh.ttype, cat, sub, acc, every: sh.every, day: sh.day, next, lead: sh.lead || 3, key: recKey({ label, cat, sub }) };
-    if (sh.mode === 'edit') { const r = recOf(sh.id); if (r) Object.assign(r, data); } else { S.recNid += 1; S.recurring.push(Object.assign({ id: 'r_' + uid(), nid: S.recNid }, data)); }
+    if (sh.jam) { const old = sh.mode === 'edit' ? (recOf(sh.id) || {}).jam : null; data.jam = { total: jtotal, paid: old ? Math.min(old.paid, jtotal) : 0, pays: old ? old.pays || [] : [] }; }
+    if (sh.mode === 'edit') { const r = recOf(sh.id); if (r) { Object.assign(r, data); if (!sh.jam) delete r.jam; r.pend = false; } } else { S.recNid += 1; S.recurring.push(Object.assign({ id: 'r_' + uid(), nid: S.recNid }, data)); }
     save(); scheduleRecur();
-    toast(`اتضبط التذكير: ${everyName(sh.every)}${(isStep(sh.every) || sh.every === 'once') ? '' : ' يوم ' + sh.day}، الميعاد ${dLabel(next)}`, 4500);
+    toast(`اتضبط التذكير: ${everyName(sh.every)}${(isStep(sh.every) || sh.every === 'once' || sh.every === 'pick') ? '' : ' يوم ' + sh.day}، الميعاد ${dLabel(next)}`, 4500);
     if (sh.mode === 'ask') recNext(); else { ui.sheet = null; render(); }
   }
   function recurDueHtml() {
     const sod = startOfDay(Date.now());
-    const due = S.recurring.filter((r) => Math.round((startOfDay(r.next) - sod) / DAY) <= (isStep(r.every) ? 0 : (r.lead || 3))).sort((a, b) => a.next - b.next); if (!due.length) return '';
+    const due = S.recurring.filter((r) => !r.pend && Math.round((startOfDay(effDue(r)) - sod) / DAY) <= (isStep(r.every) ? 0 : (r.lead || 3))).sort((a, b) => effDue(a) - effDue(b)); if (!due.length) return '';
     return `<div class="card duecard" role="status"><div class="h">مواعيد الدفع القريبة</div>${due.map((r) => {
-      const dd = Math.round((startOfDay(r.next) - sod) / DAY); const st = dd < 0 ? `متأخر ${-dd} يوم` : dd === 0 ? 'النهارده' : `بعد ${dd} يوم`; const nm = r.label || catOf(r.cat).name; const what = r.type === 'in' ? 'استلام' : 'دفع';
-      return `<div class="dueitem"><div class="row between"><div><div class="t1" style="font-weight:700">${what} ${esc(nm)}</div><div class="small">${fmt(r.amount)} · ${st}</div></div></div><div class="row"><button class="btn primary grow" data-act="rc-pay" data-id="${r.id}">${r.type === 'in' ? 'سجّل الاستلام' : 'سجّل الدفع'}</button><button class="btn ghost" data-act="rc-skip" data-id="${r.id}">تخطي</button></div></div>`;
+      const dd = Math.round((startOfDay(effDue(r)) - sod) / DAY); const st = dd < 0 ? `متأخر ${-dd} يوم` : dd === 0 ? 'النهارده' : `بعد ${dd} يوم`; const nm = r.label || catOf(r.cat).name; const what = r.type === 'in' ? 'استلام' : 'دفع';
+      return `<div class="dueitem"><div class="row between"><div><div class="t1" style="font-weight:700">${what} ${esc(nm)}</div><div class="small">${r.jam ? 'عليك جمعية، دفعتها؟ · ' : ''}${fmt(r.amount)} · ${st}${r.jam ? '<br>' + jamText(r) : ''}</div></div></div><div class="row"><button class="btn primary grow" data-act="rc-pay" data-id="${r.id}">${r.type === 'in' ? 'سجّل الاستلام' : 'سجّل الدفع'}</button><button class="btn ghost" data-act="rc-snooze" data-id="${r.id}">تأجيل</button>${r.jam ? '' : `<button class="btn ghost" data-act="rc-skip" data-id="${r.id}">تخطي</button>`}</div></div>`;
     }).join('')}</div>`;
   }
   function recurSettingsHtml() {
     const st = S.settings;
-    const rows = S.recurring.slice().sort((a, b) => a.next - b.next).map((r) => `<button class="chip" style="color:var(--ink);text-align:right;display:flex;justify-content:space-between;gap:8px;border-radius:14px;width:100%" data-act="rc-open" data-id="${r.id}"><span>${esc(r.label || catOf(r.cat).name)} · ${fmt(r.amount)}</span><span class="small">${everyName(r.every)} · الجاي ${dLabel(r.next)}</span></button>`).join('') || '<div class="small">لسه مفيش مدفوعات متكررة. هتتضاف لما تجاوب على سؤال "بيتكرر؟" وإنت بتسجل، أو تضيفها من هنا.</div>';
+    const rows = S.recurring.slice().sort((a, b) => a.next - b.next).map((r) => `<button class="chip" style="color:var(--ink);text-align:right;display:flex;justify-content:space-between;gap:8px;border-radius:14px;width:100%" data-act="rc-open" data-id="${r.id}"><span>${esc(r.label || catOf(r.cat).name)} · ${fmt(r.amount)}</span><span class="small">${r.jam ? 'جمعية ' + r.jam.paid + '/' + r.jam.total : everyName(r.every)} · ${r.pend ? 'حدد الميعاد' : 'الجاي ' + dLabel(effDue(r))}</span></button>`).join('') || '<div class="small">لسه مفيش مدفوعات متكررة. هتتضاف لما تجاوب على سؤال "بيتكرر؟" وإنت بتسجل، أو تضيفها من هنا.</div>';
     return `<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المدفوعات المتكررة</div>
       <div class="small">لما تسجل مصروف أو دخل هسألك لو بيتكرر (كل يوم أو أسبوع أو شهر...)، وهفكّرك قبل الميعاد بـ3 أيام وفي يوم الدفع. وكمان بكتشف لوحدي المصاريف المتكررة وأنبّهك لو المبلغ اتغيّر عن المعتاد. التنبيه ده شغّال دايماً ومش اختياري.</div>
       <div class="small">وقت تسجيل مصروف أو دخل جديد:</div>
@@ -911,12 +953,17 @@
       await LN.createChannel({ id: 'recur', name: 'مواعيد الدفع', description: 'تذكير بمواعيد المدفوعات المتكررة', importance: 4, visibility: 1, vibration: true });
       const tp = String(S.settings.recurTime || '09:00').split(':'); const now = Date.now(); const list = [];
       S.recurring.forEach((r) => {
-        const due = new Date(r.next); due.setHours(+tp[0] || 0, +tp[1] || 0, 0, 0); const lead = r.lead || 3; const pre = new Date(due.getTime() - lead * DAY);
+        if (r.pend) return;
+        const due = new Date(effDue(r)); due.setHours(+tp[0] || 0, +tp[1] || 0, 0, 0); const lead = r.lead || 3; const pre = new Date(due.getTime() - lead * DAY);
         const what = r.type === 'in' ? 'استلام' : 'دفع'; const nm = r.label || catOf(r.cat).name; const amt = r.amount > 0 ? ` (${fmt(r.amount)})` : '';
         if (isStep(r.every)) {
           const body = `ميعاد ${what} ${nm}${amt}`;
           const on = r.every === 'd' ? { hour: +tp[0] || 0, minute: +tp[1] || 0 } : { weekday: due.getDay() + 1, hour: +tp[0] || 0, minute: +tp[1] || 0 };
           list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body, channelId: 'recur', schedule: { on, allowWhileIdle: true } });
+          return;
+        }
+        if (r.jam) {
+          if (due.getTime() > now) list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body: `عليك جمعية${amt}: ${jamText(r).replace('جمعية: ', '')}. هل دفعتها؟`, channelId: 'recur', schedule: { at: due, allowWhileIdle: true } });
           return;
         }
         if (pre.getTime() > now) list.push({ id: 100000 + r.nid * 2, title: 'محفظتي', body: `بعد ${lead} ${lead > 10 ? 'يوم' : 'أيام'} ميعاد ${what} ${nm}${amt}`, channelId: 'recur', schedule: { at: pre, allowWhileIdle: true } });
@@ -948,7 +995,7 @@
   }
   function payItems() {
     const today = startOfDay(Date.now()); const out = [];
-    S.recurring.forEach((r) => { out.push({ src: 'rec', id: r.id, type: r.type, label: r.label, cat: r.cat, avg: r.amount, due: r.next, daysLeft: Math.round((startOfDay(r.next) - today) / DAY), kind: `${everyName(r.every)}${(isStep(r.every) || r.every === 'once') ? '' : ' · يوم ' + r.day}`, lead: r.lead || 3, daily: r.every === 'd', ignored: false }); });
+    S.recurring.forEach((r) => { const ed = effDue(r); out.push({ src: 'rec', id: r.id, type: r.type, label: r.label, cat: r.cat, avg: r.amount, due: ed, daysLeft: r.pend ? 9999 : Math.round((startOfDay(ed) - today) / DAY), pend: !!r.pend, snz: !!(r.snz > 0), jam: r.jam ? jamText(r) : '', jamPays: r.jam ? jamPaysHtml(r) : '', kind: r.jam ? 'جمعية شهرية' : `${everyName(r.every)}${(isStep(r.every) || r.every === 'once' || r.every === 'pick') ? '' : ' · يوم ' + r.day}`, lead: r.lead || 3, daily: r.every === 'd', ignored: false }); });
     payAuto().forEach((l) => { if (autoCovered(l) || autoBlocked(l)) return; out.push({ src: 'auto', key: l.key, type: l.type, label: l.label, cat: l.cat, sub: l.sub, acc: l.acc, avg: l.avg, due: l.due, daysLeft: l.daysLeft, kind: PE.kindText(l.pattern), count: l.count, pattern: l.pattern, daily: l.pattern.kind === 'day', variable: l.variable, min: l.min, max: l.max, ignored: l.ignored }); });
     out.sort((a, b) => a.due - b.due);
     return out;
@@ -962,14 +1009,14 @@
     const ico = isIn ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>';
     const arrow = `<span class="arr ${isIn ? 'in' : 'out'}" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">${ico}</svg></span>`;
     const nm = it.label || catOf(it.cat).name; const k = esc(rec ? it.id : it.key);
-    const doAct = rec ? `data-act="rc-pay" data-id="${k}"` : `data-act="pay-do" data-k="${k}"`;
+    const doAct = rec ? (it.pend ? `data-act="rc-nextdate" data-id="${k}"` : `data-act="rc-pay" data-id="${k}"`) : `data-act="pay-do" data-k="${k}"`;
     const canPin = !rec && (it.pattern.kind === 'month' || it.pattern.kind === 'year');
     const more = rec
-      ? `<button class="btn ghost" data-act="rc-skip" data-id="${k}">تخطي</button><button class="btn ghost" data-act="rc-open" data-id="${k}">تعديل</button>`
+      ? `${it.pend ? '' : `<button class="btn ghost" data-act="rc-snooze" data-id="${k}">تأجيل</button>`}${it.pend || it.jam ? '' : `<button class="btn ghost" data-act="rc-skip" data-id="${k}">تخطي</button>`}<button class="btn ghost" data-act="rc-open" data-id="${k}">تعديل</button>`
       : `${canPin ? `<button class="btn ghost" data-act="pay-pin" data-k="${k}">ثبّت</button>` : ''}<button class="btn ghost" data-act="pay-ignore" data-k="${k}">تجاهل</button>`;
-    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}${it.variable ? ' · مبلغه بيتغير' : ''}</div></div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${it.avg > 0 ? (isIn ? '+' : '-') + fmt(it.avg) : 'حدد المبلغ'}</div><div class="small">${rec ? '&nbsp;' : it.variable ? 'بين ' + fmt(it.min) + ' و ' + fmt(it.max) : 'تقريباً'}</div></div></div>
-      <div class="row between"><span class="duebadge${urgent ? ' hot' : ''}">${PE.dueText(it.daysLeft)}</span><span class="small">${payDateText(it.due)}</span><span class="srcbadge">${rec ? 'مؤكّد' : 'اكتشفته من عملياتك'}</span></div>
-      <div class="row" style="flex-wrap:wrap"><button class="btn ${isIn ? 'teal' : 'primary'} grow" ${doAct}>${isIn ? 'سجّل الاستلام' : 'سجّل الدفع'}</button>${more}</div></div>`;
+    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}${it.variable ? ' · مبلغه بيتغير' : ''}</div>${it.jam ? `<div class="small" style="font-weight:700">${esc(it.jam)}</div>` : ''}</div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${it.avg > 0 ? (isIn ? '+' : '-') + fmt(it.avg) : 'حدد المبلغ'}</div><div class="small">${rec ? '&nbsp;' : it.variable ? 'بين ' + fmt(it.min) + ' و ' + fmt(it.max) : 'تقريباً'}</div></div></div>
+      <div class="row between"><span class="duebadge${urgent ? ' hot' : ''}">${it.pend ? 'محتاج تحدد الميعاد الجاي' : PE.dueText(it.daysLeft)}${it.snz ? ' (مؤجّل)' : ''}</span><span class="small">${it.pend ? '' : payDateText(it.due)}</span><span class="srcbadge">${rec ? 'مؤكّد' : 'اكتشفته من عملياتك'}</span></div>
+      ${it.jamPays ? `<details><summary class="small">تواريخ الدفع</summary>${it.jamPays}</details>` : ''}<div class="row" style="flex-wrap:wrap"><button class="btn ${isIn ? 'teal' : 'primary'} grow" ${doAct}>${it.pend ? 'حدد الميعاد الجاي' : isIn ? 'سجّل الاستلام' : it.jam ? 'دفعت الجمعية' : 'سجّل الدفع'}</button>${more}</div></div>`;
   }
   function payHtml() {
     const all = payList(); const live = all.filter((l) => !l.ignored); const ign = all.filter((l) => l.ignored);
@@ -1047,25 +1094,39 @@
       case 'pay-ignore': S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('اتجاهلته. تقدر ترجّعه من آخر صفحة التذكير'); break;
       case 'pay-restore': S.payIgnore = S.payIgnore || {}; delete S.payIgnore[el.dataset.k]; save(); render(); break;
       case 'rc-ask': S.settings.askRecur = el.dataset.v; save(); render(); break;
-      case 'rc-new': ui.presetEdit = false; ui.sheet = { type: 'recur', mode: 'new', lead: 3, label: '', amount: '', ttype: 'out', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), every: 1, day: new Date().getDate(), next: nextFrom(new Date().getDate(), 1, 'new'), confirm: false }; render(); break;
-      case 'rc-open': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'recur', mode: 'edit', lead: r.lead || 3, id: r.id, label: r.label, amount: String(r.amount), ttype: r.type, cat: r.cat, sub: r.sub || '', acc: r.acc, every: r.every, day: r.day, next: r.next, confirm: false }; render(); } break; }
+      case 'rc-new': ui.presetEdit = false; ui.sheet = { type: 'recur', mode: 'new', lead: 3, label: '', amount: '', ttype: 'out', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), every: 'pick', jam: false, jtotal: '', day: new Date().getDate(), next: nextFrom(new Date().getDate(), 'pick', 'new'), confirm: false }; render(); break;
+      case 'rc-open': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'recur', mode: 'edit', lead: r.lead || 3, id: r.id, label: r.label, amount: String(r.amount), ttype: r.type, cat: r.cat, sub: r.sub || '', acc: r.acc, every: r.every, day: r.day, next: r.next, jam: !!r.jam, jtotal: r.jam ? String(r.jam.total) : '', paid: r.jam ? r.jam.paid : 0, confirm: false }; render(); } break; }
       case 'rc-type': ui.sheet.ttype = el.dataset.v; render(); break;
-      case 'rc-every': { const sh = ui.sheet; sh.every = (isStep(el.dataset.v) || el.dataset.v === 'once') ? el.dataset.v : +el.dataset.v; if (sh.every !== 0) sh.next = sh.mode === 'ask' ? nextFrom(sh.day, sh.every, 'ask') : (sh.next || nextFrom(sh.day, sh.every, 'new')); render(); break; }
+      case 'rc-every': { const sh = ui.sheet; sh.every = (isStep(el.dataset.v) || el.dataset.v === 'once' || el.dataset.v === 'pick') ? el.dataset.v : +el.dataset.v; if (sh.every !== 0) sh.next = sh.mode === 'ask' ? nextFrom(sh.day, sh.every, 'ask') : (sh.next || nextFrom(sh.day, sh.every, 'new')); render(); break; }
       case 'rc-save': rcSave(); break;
+      case 'rc-kind': { const sh = ui.sheet; sh.jam = el.dataset.v === 'j'; if (sh.jam) { sh.every = 1; sh.ttype = 'out'; if (!sh.label) sh.label = 'جمعية'; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } else { sh.every = 'pick'; if (sh.label === 'جمعية') sh.label = ''; } render(); break; }
+      case 'rc-snooze': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'snooze', id: r.id, label: r.label || catOf(r.cat).name, date: '' }; render(); } break; }
+      case 'sz-do': case 'sz-date': {
+        const sh = ui.sheet; const r = sh && recOf(sh.id); if (!r) break; let t;
+        if (a === 'sz-do') t = PE.addDays(startOfDay(Date.now()), +el.dataset.d); else { t = parseYmd(sh.date); if (isNaN(t) || t <= startOfDay(Date.now())) { toast('اختار تاريخ جاي'); break; } }
+        r.snz = t; save(); scheduleRecur(); ui.sheet = null; render(); toast(`اتأجل لـ ${dLabel(t)}`); break;
+      }
+      case 'rc-nextdate': { const r = recOf(el.dataset.id); if (r) { ui.sheet = nextDateSheet(r); render(); } break; }
+      case 'nd-save': {
+        const sh = ui.sheet; const r = sh && recOf(sh.id); if (!r) break; const t = parseYmd(sh.date);
+        if (isNaN(t) || t < startOfDay(Date.now())) { toast('اختار تاريخ الميعاد الجاي'); break; }
+        r.next = t; r.day = new Date(t).getDate(); r.pend = false; r.snz = 0; save(); scheduleRecur(); ui.sheet = null; render(); toast(`الميعاد الجاي ${dLabel(t)}`); break;
+      }
+      case 'nd-none': { const sh = ui.sheet; S.recurring = S.recurring.filter((x) => x.id !== sh.id); save(); scheduleRecur(); ui.sheet = null; render(); toast('اتشال التذكير'); break; }
       case 'rc-lead': ui.sheet.lead = +el.dataset.v; render(); break;
-      case 'rc-preset': { const sh = ui.sheet; const x = getPresets()[+el.dataset.i]; if (!x) break; sh.label = x.n; sh.lead = x.lead || 3; sh.every = x.every === undefined ? 12 : x.every; if (x.amount > 0) sh.amount = String(x.amount); if (isStep(sh.every)) sh.next = nextFrom(sh.day, sh.every, 'new'); render(); break; }
+      case 'rc-preset': { const sh = ui.sheet; const x = getPresets()[+el.dataset.i]; if (!x) break; sh.label = x.n; sh.lead = x.lead || 3; sh.every = x.every === undefined ? 'pick' : x.every; sh.jam = x.n === 'جمعية'; if (sh.jam) { sh.every = 1; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } if (x.amount > 0) sh.amount = String(x.amount); if (isStep(sh.every)) sh.next = nextFrom(sh.day, sh.every, 'new'); render(); break; }
       case 'rc-preset-edit': ui.presetEdit = !ui.presetEdit; render(); break;
       case 'rc-preset-del': { const l = getPresets().slice(); l.splice(+el.dataset.i, 1); S.presets = l; save(); render(); break; }
       case 'rc-preset-save': { const sh = ui.sheet; const n = (sh.label || '').trim(); if (!n) { toast('اكتب اسم التذكير الأول'); break; } const l = getPresets().filter((x) => x.n !== n); const am = parseFloat(toDigits(sh.amount)) || 0; l.push({ n, every: sh.every === 0 ? 12 : sh.every, lead: sh.lead || 3, amount: am }); S.presets = l; save(); render(); toast('اتحفظ في قايمتك'); break; }
       case 'pn-acc': ui.sheet.acc = el.dataset.v; render(); break;
       case 'pn-ok': payNowConfirm(); break;
-      case 'pn-skip': { const r = recOf(ui.sheet.id); ui.sheet = null; if (r) { const was1 = r.every === 'once'; advanceRec(r); render(); toast(was1 ? 'اتشال التذكير' : `اتخطت الدورة دي. الميعاد الجاي ${dLabel(r.next)}`); } else render(); break; }
+      case 'pn-skip': { const r = recOf(ui.sheet.id); ui.sheet = null; if (r) { const was1 = r.every === 'once'; advanceRec(r); if (r.pend) { ui.sheet = nextDateSheet(r); render(); break; } render(); toast(was1 ? 'اتشال التذكير' : `اتخطت الدورة دي. الميعاد الجاي ${dLabel(r.next)}`); } else render(); break; }
       case 'rc-skip-ask': { if (!ui.sheet.txId && !(ui.recQueue || []).length) { ui.sheet = null; render(); } else recNext(); break; }
       case 'rc-cancel-ask': { const id = ui.sheet.txId; if (id) { S.txs = S.txs.filter((t) => t.id !== id); save(); toast('اتلغت العملية'); } recNext(); if (id && !ui.toast) toast('اتلغت العملية'); break; }
       case 'rc-del-ask': ui.sheet.confirm = true; render(); break;
       case 'rc-del-cancel': ui.sheet.confirm = false; render(); break;
       case 'rc-del-do': { const id = ui.sheet.id; S.recurring = S.recurring.filter((r) => r.id !== id); save(); scheduleRecur(); ui.sheet = null; render(); toast('اتحذفت الدفعة المتكررة'); break; }
-      case 'rc-skip': { const r = recOf(el.dataset.id); if (r) { const was1 = r.every === 'once'; advanceRec(r); render(); toast(was1 ? 'اتشال التذكير' : `اتخطت الدورة دي. الميعاد الجاي ${dLabel(r.next)}`); } break; }
+      case 'rc-skip': { const r = recOf(el.dataset.id); if (r) { const was1 = r.every === 'once'; advanceRec(r); if (r.pend) { ui.sheet = nextDateSheet(r); render(); break; } render(); toast(was1 ? 'اتشال التذكير' : `اتخطت الدورة دي. الميعاد الجاي ${dLabel(r.next)}`); } break; }
       case 'rc-pay': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'paynow', src: 'rec', id: r.id, label: r.label, amount: r.amount > 0 ? String(r.amount) : '', ttype: r.type, cat: r.cat, sub: r.sub || '', acc: '' }; render(); } break; }
       case 'rc-pay-old': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'tx', isNew: true, id: null, payFor: r.id, catManual: false, subManual: false, hint: '', tx: { type: r.type, amount: String(r.amount), label: r.label, cat: r.cat, sub: r.sub || '', acc: validAcc(r.acc), to: '' }, date: ymd(Date.now()), time: hhmm(Date.now()), confirm: false }; render(); } break; }
       case 'acc-edit': ui.sheet = { type: 'accedit', id: el.dataset.id, confirm: false, moveTo: '' }; render(); break;
@@ -1167,6 +1228,7 @@
     const t = e.target;
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.rc) { rcSet(t, false); return; }
+    if (t.dataset.nd || t.dataset.sz) { if (ui.sheet) ui.sheet.date = t.value; return; }
     if (t.dataset.pn) { if (ui.sheet && ui.sheet.type === 'paynow') ui.sheet.amount = t.value; return; }
     if (t.dataset.na) { if (ui.sheet && ui.sheet.type === 'newacc') ui.sheet[t.dataset.na] = t.value; return; }
     if (t.dataset.nc) { if (ui.sheet && ui.sheet.type === 'newcat') ui.sheet[t.dataset.nc] = t.value; return; }
@@ -1182,6 +1244,7 @@
     const t = e.target;
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.rc) { rcSet(t, true); return; }
+    if (t.dataset.nd || t.dataset.sz) { if (ui.sheet) ui.sheet.date = t.value; return; }
     if (t.dataset.ae && ui.sheet && ui.sheet.type === 'accedit') {
       const a = acctOf(ui.sheet.id); if (!a) return;
       if (t.dataset.ae === 'name') { const v = t.value.trim(); if (!v) { render(); return; } if (nameTaken(v, a.id)) { toast('فيه حساب بنفس الاسم'); render(); return; } applyAcct(() => { a.name = v; }); render(); }
