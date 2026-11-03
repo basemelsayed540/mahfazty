@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.2';
+  const APP_VERSION = '1.20.3';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -876,7 +876,7 @@
     else if (sh.mode === 'ask') actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">حفظ</button><button class="btn ghost grow" data-act="rc-skip-ask">تخطي</button><button class="btn ghost grow" data-act="rc-cancel-ask" style="color:var(--red)">إلغاء</button></div>${sh.txId ? '<div class="small">"إلغاء" بيمسح العملية اللي لسه مسجلها. "تخطي" بيسيبها زي ما هي من غير تكرار.</div>' : ''}`;
     else actions = `<div class="row stick"><button class="btn primary grow" data-act="rc-save">${sh.mode === 'new' ? 'إضافة' : 'حفظ'}</button>${sh.mode === 'edit' ? '<button class="btn red" data-act="rc-del-ask">حذف</button>' : ''}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
     const backBtn = sh.mode === 'ask' ? '<button class="xbtn" data-act="rc-skip-ask" aria-label="رجوع" style="font-size:22px">→</button>' : '';
-    return `<div class="row" style="gap:6px;align-items:center">${backBtn}<div class="h" style="font-size:18px">${title}</div></div>${typeSeg}${kindSeg}${presets}
+    return `<div class="row" style="gap:6px;align-items:center">${backBtn}<div class="h" style="font-size:18px">${title}</div></div>${typeSeg}${presets}
       <div class="row2"><input id="rc_amount" data-rc="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(sh.amount)}"><input id="rc_label" data-rc="label" aria-label="الوصف" value="${esc(sh.label)}" placeholder="الوصف: كهرباء / رخصة"></div>
       ${sh.jam ? '' : `<div class="field col"><label>بيتكرر كل قد إيه؟</label><div class="pick hs">${pickHtml(everyList(sh.mode), String(sh.every), 'data-act="rc-every"')}</div></div>`}${more}${sh.jam && sh.id ? jamPaysHtml(recOf(sh.id) || {}) : ''}${actions}`;
   }
@@ -901,6 +901,7 @@
     const sh = ui.sheet; if (!sh || sh.type !== 'recur') return; const k = el.dataset.rc;
     if (k === 'label') sh.label = el.value; else if (k === 'amount') sh.amount = el.value; else if (k === 'jtotal') sh.jtotal = el.value;
     if (!commit) return;
+    if (k === 'label' && sh.mode === 'new') { const j = /جمعي/.test(sh.label || ''); if (j !== !!sh.jam) { sh.jam = j; if (j) { sh.every = 1; sh.ttype = 'out'; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } else sh.every = 'pick'; render(); } return; }
     if (k === 'day') { const d = Math.min(31, Math.max(1, parseInt(toDigits(el.value), 10) || 1)); sh.day = d; const cur = new Date(sh.next); let nt = mkDate(cur.getFullYear(), cur.getMonth(), d).getTime(); if (sh.mode !== 'ask' && nt < startOfDay(Date.now())) nt = mkDate(cur.getFullYear(), cur.getMonth() + 1, d).getTime(); sh.next = nt; render(); }
     if (k === 'next' && el.value) { const q = el.value.split('-').map(Number); const nt = new Date(q[0], q[1] - 1, q[2]).getTime(); if (!isNaN(nt)) { sh.next = nt; sh.day = new Date(nt).getDate(); render(); } }
   }
@@ -1119,7 +1120,7 @@
       }
       case 'nd-none': { const sh = ui.sheet; S.recurring = S.recurring.filter((x) => x.id !== sh.id); save(); scheduleRecur(); ui.sheet = null; render(); toast('اتشال التذكير'); break; }
       case 'rc-lead': ui.sheet.lead = +el.dataset.v; render(); break;
-      case 'rc-preset': { const sh = ui.sheet; const x = getPresets()[+el.dataset.i]; if (!x) break; sh.label = x.n; sh.lead = x.lead || 3; sh.every = x.every === undefined ? 'pick' : x.every; sh.jam = x.n === 'جمعية'; if (sh.jam) { sh.every = 1; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } if (x.amount > 0) sh.amount = String(x.amount); if (isStep(sh.every)) sh.next = nextFrom(sh.day, sh.every, 'new'); render(); break; }
+      case 'rc-preset': { const sh = ui.sheet; const x = getPresets()[+el.dataset.i]; if (!x) break; sh.label = x.n; sh.lead = x.lead || 3; sh.every = x.every === undefined ? 'pick' : x.every; sh.jam = /جمعي/.test(x.n); if (sh.jam) { sh.every = 1; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } if (x.amount > 0) sh.amount = String(x.amount); if (isStep(sh.every)) sh.next = nextFrom(sh.day, sh.every, 'new'); render(); break; }
       case 'rc-preset-edit': ui.presetEdit = !ui.presetEdit; render(); break;
       case 'rc-preset-del': { const l = getPresets().slice(); l.splice(+el.dataset.i, 1); S.presets = l; save(); render(); break; }
       case 'rc-preset-save': { const sh = ui.sheet; const n = (sh.label || '').trim(); if (!n) { toast('اكتب اسم التذكير الأول'); break; } const l = getPresets().filter((x) => x.n !== n); const am = parseFloat(toDigits(sh.amount)) || 0; l.push({ n, every: sh.every === 0 ? 12 : sh.every, lead: sh.lead || 3, amount: am }); S.presets = l; save(); render(); toast('اتحفظ في قايمتك'); break; }
