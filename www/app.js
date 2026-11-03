@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.9';
+  const APP_VERSION = '1.20.10';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -1363,18 +1363,32 @@
     toast('بختبر الاتصال…', 20000);
     try { const t = await callClaude('رد بكلمة واحدة فقط: تمام', 'اختبار', 20); toast(t ? 'الاتصال شغال ✔' : 'اتصلت لكن مفيش رد'); } catch (e) { toast('فشل الاتصال: ' + (e && e.message ? e.message : '') + '. تأكد من المفتاح والنت.', 5000); }
   }
+  function updOverlay(pct, msg) {
+    let o = document.getElementById('updov');
+    if (!o) { o = document.createElement('div'); o.id = 'updov'; o.setAttribute('role', 'alertdialog'); o.setAttribute('aria-live', 'polite'); o.innerHTML = '<div class="updbox"><div class="updt" id="updt"></div><div class="updbar2" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i id="updi"></i></div><div class="small" id="updp"></div></div>'; document.body.appendChild(o); }
+    const t = document.getElementById('updt'); const b = document.getElementById('updi'); const pc = document.getElementById('updp');
+    if (t) t.textContent = msg; if (b) { b.style.width = pct + '%'; if (b.parentNode) b.parentNode.setAttribute('aria-valuenow', String(Math.round(pct))); } if (pc) pc.textContent = Math.round(pct) + '%';
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function refreshApp() {
     if (ui.busyRefresh) return; ui.busyRefresh = true;
-    toast('جاري التحقق من الاتصال…', 6000);
+    updOverlay(3, 'جاري التحقق من الاتصال…');
     let online = false;
     try {
       const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
       const r = await fetch('changelog.json?_=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(tm); online = r.ok;
     } catch (e) { online = false; }
-    ui.busyRefresh = false;
-    if (!online) { toast('لا يوجد اتصال بالإنترنت. التطبيق شغال على نسخته الحالية وبياناتك محفوظة.', 4500); return; }
-    toast('جاري التحديث…', 3000);
+    if (!online) { const o = document.getElementById('updov'); if (o) o.remove(); ui.busyRefresh = false; toast('لا يوجد اتصال بالإنترنت. التطبيق شغال على نسخته الحالية وبياناتك محفوظة.', 4500); return; }
+    updOverlay(10, 'جاري تحميل التحديث…');
+    const files = ['index.html', 'style.css', 'assistant.js', 'payments.js', 'app.js', 'changelog.json']; let cache = null;
+    try { cache = 'caches' in window ? await caches.open('mahfazty-cache') : null; } catch (e) { cache = null; }
+    for (let k = 0; k < files.length; k++) {
+      try { const res = await fetch(files[k] + '?_=' + Date.now(), { cache: 'reload' }); if (res.ok && cache && files[k] !== 'changelog.json') await cache.put(files[k], res.clone()); } catch (e) { /* يكمل */ }
+      updOverlay(10 + (k + 1) / files.length * 75, 'جاري تحميل التحديث…');
+    }
     try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } } catch (e) { /* ignore */ }
+    updOverlay(95, 'تمام. جاري إعادة تشغيل التطبيق…'); await sleep(500);
+    updOverlay(100, 'إعادة التشغيل…'); await sleep(400);
     location.reload();
   }
   (function listenNotif() {

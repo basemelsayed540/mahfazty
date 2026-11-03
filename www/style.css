@@ -252,3 +252,8 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .ddrow{display:flex;gap:6px;align-items:center}
 .ddin{flex:1;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:var(--bg);font-size:15px}
 .ddx{min-width:44px;padding:0 10px}
+#updov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
+.updbox{width:100%;max-width:340px;background:var(--card);color:var(--ink);border-radius:20px;padding:22px 20px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.updt{font-size:16px;font-weight:800}
+.updbar2{height:12px;border-radius:12px;background:var(--line);overflow:hidden}
+.updbar2 i{display:block;height:100%;width:0;background:var(--accentf);border-radius:12px;transition:width .25s ease}
