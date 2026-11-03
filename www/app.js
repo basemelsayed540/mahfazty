@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.6';
+  const APP_VERSION = '1.20.7';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -781,15 +781,15 @@
   }
 
   /* ---------- المدفوعات المتكررة ---------- */
-  const EVERY = [{ id: '0', name: 'مرة واحدة' }, { id: 'd', name: 'كل يوم' }, { id: 'w', name: 'كل أسبوع' }, { id: '1', name: 'كل شهر' }, { id: '3', name: 'كل 3 شهور' }, { id: '6', name: 'كل 6 شهور' }, { id: '12', name: 'كل سنة' }];
-  const everyList = (mode) => (mode === 'ask' ? EVERY : [{ id: 'pick', name: 'أحدد الميعاد الجاي بنفسي' }, { id: 'once', name: 'مرة واحدة' }].concat(EVERY.filter((x) => x.id !== '0'), [{ id: '24', name: 'كل سنتين' }, { id: '60', name: 'كل 5 سنين' }, { id: '120', name: 'كل 10 سنين' }]));
+  const EVERY = [{ id: '0', name: 'مرة واحدة' }, { id: 'd', name: 'كل يوم' }, { id: 'w', name: 'كل أسبوع' }, { id: 't', name: 'كل 10 أيام' }, { id: '1', name: 'كل شهر' }, { id: '3', name: 'كل 3 شهور' }, { id: '6', name: 'كل 6 شهور' }, { id: '12', name: 'كل سنة' }];
+  const everyList = (mode) => (mode === 'ask' ? EVERY : [{ id: 'pick', name: 'تاريخ تجديد أو انتهاء أكتبه' }, { id: 'once', name: 'مرة واحدة' }].concat(EVERY.filter((x) => x.id !== '0'), [{ id: '24', name: 'كل سنتين' }, { id: '60', name: 'كل 5 سنين' }, { id: '120', name: 'كل 10 سنين' }]));
   const LEADS = [{ id: '3', name: '3 أيام' }, { id: '7', name: 'أسبوع' }, { id: '14', name: 'أسبوعين' }, { id: '30', name: 'شهر' }];
   const getPresets = () => (Array.isArray(S.presets) ? S.presets : PRESETS.map((n) => ({ n, every: 'pick', lead: 30, amount: 0 })));
   const PRESETS = ['جمعية', 'باقة الانترنت', 'تجديد رخصة القيادة', 'تجديد رخصة السيارة', 'تجديد رخصة الدراجة', 'تجديد البطاقة الشخصية', 'تجديد جواز السفر', 'تأمين السيارة', 'فحص السيارة'];
-  const isStep = (e) => e === 'd' || e === 'w';
-  const stepDays = (e) => (e === 'd' ? 1 : 7);
+  const isStep = (e) => e === 'd' || e === 'w' || e === 't';
+  const stepDays = (e) => (e === 'd' ? 1 : e === 't' ? 10 : 7);
   const askMode = () => (S.settings.askRecur === 'smart' ? 'smart' : 'always');
-  const everyName = (n) => (n === 'pick' ? 'ميعاد أحدده' : n === 'once' ? 'مرة واحدة' : n === 'd' ? 'كل يوم' : n === 'w' ? 'كل أسبوع' : n === 1 ? 'كل شهر' : n === 24 ? 'كل سنتين' : (n > 12 && n % 12 === 0) ? `كل ${n / 12} سنين` : n === 12 ? 'كل سنة' : `كل ${n} شهور`);
+  const everyName = (n) => (n === 'pick' ? 'ميعاد أحدده' : n === 'once' ? 'مرة واحدة' : n === 'd' ? 'كل يوم' : n === 'w' ? 'كل أسبوع' : n === 't' ? 'كل 10 أيام' : n === 1 ? 'كل شهر' : n === 24 ? 'كل سنتين' : (n > 12 && n % 12 === 0) ? `كل ${n / 12} سنين` : n === 12 ? 'كل سنة' : `كل ${n} شهور`);
   const mkDate = (y, m, d) => { const dim = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(d, dim)); };
   const dLabel = (ts) => { const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
   const recKey = (x) => norm1(x.label) || (x.cat + '|' + (x.sub || ''));
@@ -889,11 +889,11 @@
          <div class="field col"><label for="rc_next">ميعاد القسط الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}
          <div class="ok">كل شهر في ميعاد القسط هفكّرك: "عليك جمعية، دفعتها؟". تقدر تأجلها يوم أو أسبوع أو لتاريخ تختاره، ولما تدفع هسجل تاريخ الدفع وأقولك فاضل كام شهر.</div>${sh.id && sh.paid ? `<div class="small">اتدفع ${sh.paid} من ${sh.jtotal || '؟'} أقساط.</div>` : ''}`;
     const more = sh.jam ? jamBox : sh.every === 'pick'
-      ? `<div class="field col"><label for="rc_next">ميعاد ${what} (اختاره بنفسك)</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}<div class="ok">بعد ما تدفع هسألك: الميعاد الجاي إمتى؟ فمفيش تكرار تلقائي عشوائي.</div>`
+      ? `<div class="field col"><label for="rc_next">تاريخ التجديد أو الانتهاء (اكتبه أو اختاره)</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}<div class="ok">بعد ما تدفع هسألك: الميعاد الجاي إمتى؟ فمفيش تكرار تلقائي عشوائي.</div>`
       : sh.every === 'once'
       ? `<div class="field col"><label for="rc_next">ميعاد ${what}</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}<div class="ok">هفكّرك قبل الميعاد وفي يومه الساعة ${tt}، وهتختار الحساب وتأكد المبلغ وقتها.</div>`
       : isStep(sh.every)
-      ? `<div class="field col"><label for="rc_next">ميعاد ${what} الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div><div class="ok">هفكّرك ${sh.every === 'd' ? 'كل يوم' : 'كل أسبوع في نفس اليوم'} الساعة ${tt}.</div>`
+      ? `${sh.every === 'w' ? `<div class="field col"><label>اختار يوم الأسبوع</label><div class="pick hs">${[6, 0, 1, 2, 3, 4, 5].map((d) => `<button type="button" class="pk${new Date(sh.next).getDay() === d ? ' on' : ''}" data-act="rc-wd" data-v="${d}">${PE.WEEKDAYS[d]}</button>`).join('')}</div></div>` : ''}<div class="field col"><label for="rc_next">${sh.every === 'd' ? 'ميعاد' : 'أو اكتب تاريخ'} ${what} الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div><div class="ok">هفكّرك ${sh.every === 'd' ? 'كل يوم' : sh.every === 't' ? 'كل 10 أيام' : 'كل أسبوع في نفس اليوم'} الساعة ${tt}.</div>`
       : sh.every > 0
       ? `<div class="field col"><label for="rc_day">يوم ${what} من الشهر (1 إلى 31)</label><input id="rc_day" type="number" min="1" max="31" inputmode="numeric" data-rc="day" value="${sh.day}"></div>
          <div class="field col"><label for="rc_next">ميعاد ${what} الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>
@@ -992,8 +992,8 @@
         const what = r.type === 'in' ? 'استلام' : 'دفع'; const nm = r.label || catOf(r.cat).name; const amt = r.amount > 0 ? ` (${fmt(r.amount)})` : '';
         if (isStep(r.every)) {
           const body = `ميعاد ${what} ${nm}${amt}`;
-          const on = r.every === 'd' ? { hour: +tp[0] || 0, minute: +tp[1] || 0 } : { weekday: due.getDay() + 1, hour: +tp[0] || 0, minute: +tp[1] || 0 };
-          list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body, channelId: 'recur', schedule: { on, allowWhileIdle: true } });
+          const on = r.every === 't' ? null : r.every === 'd' ? { hour: +tp[0] || 0, minute: +tp[1] || 0 } : { weekday: due.getDay() + 1, hour: +tp[0] || 0, minute: +tp[1] || 0 };
+          if (on) list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body, channelId: 'recur', schedule: { on, allowWhileIdle: true } }); else if (due.getTime() > now) list.push({ id: 100000 + r.nid * 2 + 1, title: 'محفظتي', body: `النهارده ${body}`, channelId: 'recur', schedule: { at: due, allowWhileIdle: true } });
           return;
         }
         if (r.jam) {
@@ -1133,6 +1133,7 @@
       case 'rc-type': ui.sheet.ttype = el.dataset.v; render(); break;
       case 'rc-every': { const sh = ui.sheet; sh.every = (isStep(el.dataset.v) || el.dataset.v === 'once' || el.dataset.v === 'pick') ? el.dataset.v : +el.dataset.v; if (sh.every !== 0) sh.next = sh.mode === 'ask' ? nextFrom(sh.day, sh.every, 'ask') : (sh.next || nextFrom(sh.day, sh.every, 'new')); render(); break; }
       case 'rc-save': rcSave(); break;
+      case 'rc-wd': { const sh = ui.sheet; const want = +el.dataset.v; let t = startOfDay(Date.now()); for (let i = 0; i < 7 && new Date(t).getDay() !== want; i++) t = PE.addDays(t, 1); sh.next = t; sh.day = new Date(t).getDate(); render(); break; }
       case 'rc-kind': { const sh = ui.sheet; sh.jam = el.dataset.v === 'j'; if (sh.jam) { sh.every = 1; sh.ttype = 'out'; if (!sh.label) sh.label = 'جمعية'; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } else { sh.every = 'pick'; if (sh.label === 'جمعية') sh.label = ''; } render(); break; }
       case 'rc-snooze': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'snooze', id: r.id, label: r.label || catOf(r.cat).name, date: '' }; render(); } break; }
       case 'sz-do': case 'sz-date': {
