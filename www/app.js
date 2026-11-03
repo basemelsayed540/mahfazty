@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.10';
+  const APP_VERSION = '1.20.11';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -63,7 +63,7 @@
     const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY);
     if (diff === 0) return 'النهارده'; if (diff === 1) return 'امبارح'; const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
   }
-  function toast(msg, ms) { ui.toast = msg; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { ui.toast = ''; const el = document.querySelector('.toast'); if (el) el.remove(); else render(); }, ms || 3200); }
+  function toast(msg, ms, kind) { ui.toast = msg; ui.toastKind = kind || ''; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { ui.toast = ''; const el = document.querySelector('.toast'); if (el) el.remove(); else render(); }, ms || 3200); }
 
   function balances() {
     const b = {}; S.accounts.forEach((a) => { b[a.id] = a.opening || 0; });
@@ -143,7 +143,7 @@
   }
 
   function entryModeSeg(mode, hideAcc) {
-    const accRow = hideAcc ? '' : `<div class="field col" style="margin-bottom:2px"><label>الحساب${ui.entryAcc ? '' : ' <span style="color:var(--red)">(اختار الحساب الأول)</span>'}</label><div class="pick hs">${accPick(ui.entryAcc || '', 'data-act="top-acc"')}</div></div>`;
+    const accRow = hideAcc ? '' : `<div class="field col${ui.entryAcc ? '' : ' needacc'}" style="margin-bottom:2px"><label>الحساب${ui.entryAcc ? '' : ' <span style="color:var(--red)">(اختار الحساب الأول)</span>'}</label><div class="pick hs">${accPick(ui.entryAcc || '', 'data-act="top-acc"')}</div></div>`;
     return accRow + `<div class="seg" role="group" aria-label="طريقة الإدخال"><button class="${mode === 'smart' ? 'on' : ''}" data-act="entry-mode" data-v="smart">كتابة بكلامك</button><button class="${mode === 'manual' ? 'on' : ''}" data-act="entry-mode" data-v="manual">يدوي</button></div>`;
   }
   function entryHtml() {
@@ -211,7 +211,7 @@
         : (it.usedContext ? `<div class="ok">فهمتها من سياق كلامك</div>` : '');
       return `<div class="ditem" data-i="${i}">
         <div class="row"><input data-f="amount" inputmode="decimal" aria-label="المبلغ" value="${esc(it.amount)}" style="max-width:110px"><input data-f="label" aria-label="الوصف" value="${esc(it.label)}" placeholder="الوصف"><button class="xbtn" data-act="del-item" data-i="${i}" aria-label="حذف البند">✕</button></div>
-        <div class="small">التصنيف</div><div class="pick">${catPick(it.type, it.cat, `data-act="di-pick" data-i="${i}" data-k="cat"`)}</div>${subPickHtml(it, i)}<div class="small">الحساب${it.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</div><div class="pick hs">${accPick(it.acc, `data-act="di-pick" data-i="${i}" data-k="acc"`)}</div>
+        <div class="small">التصنيف</div><div class="pick">${catPick(it.type, it.cat, `data-act="di-pick" data-i="${i}" data-k="cat"`)}</div>${subPickHtml(it, i)}<div class="small">الحساب${it.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</div><div class="pick hs${it.acc ? '' : ' needacc'}">${accPick(it.acc, `data-act="di-pick" data-i="${i}" data-k="acc"`)}</div>
         <div class="seg" role="group" aria-label="النوع"><button class="${it.type === 'out' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="out">مصروف</button><button class="${it.type === 'in' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="in">دخل</button></div>
         ${msg}</div>`;
     }).join('');
@@ -577,7 +577,7 @@
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     ui._items = payItems();
     const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'pay' ? payHtml() : ui.tab === 'month' ? statsHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
-    $('#app').innerHTML = updBarHtml() + topBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    $('#app').innerHTML = updBarHtml() + topBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast${ui.toastKind ? ' ' + ui.toastKind : ''}" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
   }
@@ -648,7 +648,7 @@
     if (d.date) { const q = d.date.split('-').map(Number); const t0 = new Date(q[0], (q[1] || 1) - 1, q[2] || 1).getTime(); if (!isNaN(t0)) ts = t0 === startOfDay(now) ? now : t0 + 12 * 36e5; }
     if (d.kind === 'transfer') {
       S.txs.push({ id: uid(), ts, type: 'xfer', amount: d.amount, acc: d.from, to: d.to, label: 'تحويل', cat: 'other' });
-      ui.draft = null; ui.text = ''; save(); toast('اتسجل التحويل'); return;
+      ui.draft = null; ui.text = ''; save(); toast('اتسجل التحويل', 3200, 'info'); return;
     }
     const good = d.items.filter((it) => +it.amount > 0); const notes = [];
     if (good.some((it) => !it.acc)) { toast('اختار الحساب لكل بند: نقدي أو محفظة أو انستا...'); render(); return; }
@@ -662,7 +662,7 @@
     if (good.length) S.settings.lastAcc = good[good.length - 1].acc;
     ui.draft = null; ui.text = ''; if (ui.sheet && ui.sheet.type === 'entry') ui.sheet = null; S.settings.lastReminder = Date.now(); save();
     const advNote = afterSave(S.txs.slice(S.txs.length - good.length));
-    toast((notes.length ? notes.join(' · ') : `اتسجل ${good.length} ${good.length > 1 ? 'عمليات' : 'عملية'}`) + (advNote ? ' · ' + advNote : ''));
+    toast((notes.length ? notes.join(' · ') : `اتسجل ${good.length} ${good.length > 1 ? 'عمليات' : 'عملية'}`) + (advNote ? ' · ' + advNote : ''), 3200, good.length && good.every((it) => it.type === 'in') ? 'in' : 'out');
   }
 
   /* ---------- تعديل العمليات والتصنيفات ---------- */
@@ -676,7 +676,7 @@
       const ts0 = new Date(dq[0], (dq[1] || 1) - 1, dq[2] || 1, tq[0] || 0, tq[1] || 0).getTime(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
       else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc, sub: t.sub || '' }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, !!sh.catManual); if (lab && t.sub && sh.subManual) { const ad = engine.learnSub(lab, t.cat, t.sub); if (ad.length) subNote = `اتعلمت إن "${ad.join(' ')}" = ${engine.subName(t.cat, t.sub)}`; } }
-      S.settings.lastAcc = t.acc; save(); ui.sheet = null; const advNote = afterSave(S.txs[S.txs.length - 1], sh.payFor); toast([subNote || 'اتسجلت العملية', advNote].filter(Boolean).join(' · ')); return;
+      S.settings.lastAcc = t.acc; save(); ui.sheet = null; const advNote = afterSave(S.txs[S.txs.length - 1], sh.payFor); toast([subNote || 'اتسجلت العملية', advNote].filter(Boolean).join(' · '), 3200, t.type === 'in' ? 'in' : t.type === 'xfer' ? 'info' : 'out'); return;
     }
     const orig = S.txs.find((x) => x.id === t.id); if (!orig) { ui.sheet = null; render(); return; }
     const amount = parseFloat(toDigits(t.amount)); if (!(amount > 0)) { toast('اكتب مبلغ صحيح'); return; }
@@ -921,7 +921,7 @@
     const isIn = sh.ttype === 'in'; const nm = sh.label || catOf(sh.cat).name; const rec = sh.src === 'rec';
     return `<div class="h" style="font-size:18px">${isIn ? 'استلام' : 'دفع'}: ${esc(nm)}</div>
       <div class="field col"><label for="pn_amount">المبلغ (تأكده أو عدّله)</label><input id="pn_amount" data-pn="amount" inputmode="decimal" placeholder="المبلغ" value="${esc(sh.amount)}"></div>
-      <div class="field col"><label>${isIn ? 'استلمته في أنهي حساب؟' : 'دفعته من أنهي حساب؟'}${sh.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</label><div class="pick hs">${accPick(sh.acc, 'data-act="pn-acc"')}</div></div>
+      <div class="field col${sh.acc ? '' : ' needacc'}"><label>${isIn ? 'استلمته في أنهي حساب؟' : 'دفعته من أنهي حساب؟'}${sh.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</label><div class="pick hs">${accPick(sh.acc, 'data-act="pn-acc"')}</div></div>
       <div class="row stick"><button class="btn primary grow" data-act="pn-ok">${isIn ? 'تأكيد الاستلام' : 'تأكيد الدفع'}</button>${rec ? '<button class="btn ghost" data-act="pn-skip">تخطي</button>' : ''}<button class="btn ghost" data-act="close">إغلاق</button></div>`;
   }
   function payNowConfirm() {
@@ -932,7 +932,7 @@
     S.txs.push(tx); S.settings.lastAcc = sh.acc;
     if (sh.src === 'rec') { const r = recOf(sh.id); if (r && (r.every === 'once' || r.every === 'pick' || (typeof r.every === 'number' && r.every >= 12)) && amount !== r.amount) r.amount = amount; }
     save(); ui.sheet = null; const note = afterSave(tx, sh.src === 'rec' ? sh.id : null);
-    toast([sh.ttype === 'in' ? 'اتسجل الاستلام' : 'اتسجل الدفع', note].filter(Boolean).join(' · '));
+    toast([sh.ttype === 'in' ? 'اتسجل الاستلام' : 'اتسجل الدفع', note].filter(Boolean).join(' · '), 3200, sh.ttype === 'in' ? 'in' : 'out');
   }
   function rcSet(el, commit) {
     const sh = ui.sheet; if (!sh || sh.type !== 'recur') return; const k = el.dataset.rc;
@@ -1128,9 +1128,9 @@
     const idx = +el.dataset.i;
     switch (a) {
       case 'tab': ui.tab = el.dataset.id; render(); window.scrollTo(0, 0); break;
-      case 'te-pick': { const sh = ui.sheet; const k = el.dataset.k; sh.tx[k] = el.dataset.v; if (k === 'cat') { sh.catManual = true; sh.hint = ''; if (sh.tx.sub && !engine.subsOf(sh.tx.cat).some((x) => x.id === sh.tx.sub)) sh.tx.sub = ''; } if (k === 'sub') sh.subManual = true; render(); break; }
-      case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat' && it.sub && !engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; render(); break; }
-      case 'top-acc': { ui.entryAcc = el.dataset.v; const sh = ui.sheet; if (sh && sh.type === 'tx' && sh.isNew) sh.tx.acc = ui.entryAcc; if (ui.draft && ui.draft.items) ui.draft.items.forEach((it) => { if (!it.acc) it.acc = ui.entryAcc; }); render(); break; }
+      case 'te-pick': { const sh = ui.sheet; const k = el.dataset.k; sh.tx[k] = el.dataset.v; if (k === 'cat') { sh.catManual = true; sh.hint = ''; if (sh.tx.sub && !engine.subsOf(sh.tx.cat).some((x) => x.id === sh.tx.sub)) sh.tx.sub = ''; } if (k === 'sub') sh.subManual = true; if (k === 'acc' || k === 'to') toast(`${k === 'to' ? 'اخترت الحساب المحوّل له' : 'اخترت الحساب'}: ${accName(el.dataset.v)}`, 1800, 'info'); else render(); break; }
+      case 'di-pick': { syncInputs(); const it = ui.draft.items[+el.dataset.i]; it[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'cat' && it.sub && !engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; if (el.dataset.k === 'acc') toast(`اخترت الحساب: ${accName(el.dataset.v)}`, 1800, 'info'); else render(); break; }
+      case 'top-acc': { ui.entryAcc = el.dataset.v; const sh = ui.sheet; if (sh && sh.type === 'tx' && sh.isNew) sh.tx.acc = ui.entryAcc; if (ui.draft && ui.draft.items) ui.draft.items.forEach((it) => { if (!it.acc) it.acc = ui.entryAcc; }); toast(`اخترت الحساب: ${accName(ui.entryAcc)}`, 1800, 'info'); break; }
       case 'pay-tab': ui.payTab = el.dataset.v; render(); break;
       case 'pay-do': payDo(el.dataset.k); break;
       case 'pay-pin': payPin(el.dataset.k); break;
@@ -1164,7 +1164,7 @@
       case 'rc-preset-edit': ui.presetEdit = !ui.presetEdit; render(); break;
       case 'rc-preset-del': { const l = getPresets().slice(); l.splice(+el.dataset.i, 1); S.presets = l; save(); render(); break; }
       case 'rc-preset-save': { const sh = ui.sheet; const n = (sh.label || '').trim(); if (!n) { toast('اكتب اسم التذكير الأول'); break; } const l = getPresets().filter((x) => x.n !== n); const am = parseFloat(toDigits(sh.amount)) || 0; l.push({ n, every: sh.every === 0 ? 12 : sh.every, lead: sh.lead || 3, amount: am }); S.presets = l; save(); render(); toast('اتحفظ في قايمتك'); break; }
-      case 'pn-acc': ui.sheet.acc = el.dataset.v; render(); break;
+      case 'pn-acc': ui.sheet.acc = el.dataset.v; toast(`اخترت الحساب: ${accName(el.dataset.v)}`, 1800, 'info'); break;
       case 'pn-ok': payNowConfirm(); break;
       case 'pn-skip': { const r = recOf(ui.sheet.id); ui.sheet = null; if (r) { const was1 = r.every === 'once'; advanceRec(r); if (r.pend) { ui.sheet = nextDateSheet(r); render(); break; } render(); toast(was1 ? 'اتشال التذكير' : `اتخطت الدورة دي. الميعاد الجاي ${dLabel(r.next)}`); } else render(); break; }
       case 'rc-skip-ask': { if (!ui.sheet.txId && !(ui.recQueue || []).length) { ui.sheet = null; render(); } else recNext(); break; }
