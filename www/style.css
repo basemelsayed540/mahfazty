@@ -238,3 +238,6 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .skinbtn b{font-size:14px}
 .skinbtn .dots{display:flex;gap:4px}
 .skinbtn .dots i{width:18px;height:18px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.18)}
+
+.topbar{position:sticky;top:0;z-index:14;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 6px;background:var(--bg)}
+.topbar .tbt{flex:1;text-align:center;font-size:17px;font-weight:800}

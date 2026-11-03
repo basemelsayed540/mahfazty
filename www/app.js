@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.1';
+  const APP_VERSION = '1.20.2';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -107,7 +107,7 @@
     const b = balances(); const total = S.accounts.reduce((x, a) => x + (b[a.id] || 0), 0);
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
     return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}${payAlertHtml()}
-      <div class="total"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>
+      <div class="total"><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <button class="card carry" data-act="tab" data-id="month" style="display:flex;justify-content:space-between;align-items:center"><span><span class="small" style="display:block">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(carryOver(nowD.getFullYear(), nowD.getMonth()).total)}</b></span><span class="small">التفاصيل ‹</span></button>
       <div class="accs3">${S.accounts.map((a) => `<button class="acard" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${fmt(b[a.id] || 0)}"><span>${esc(a.name)}</span><b>${fmt(b[a.id] || 0)}</b></button>`).join('')}</div>
@@ -537,12 +537,17 @@
     return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('pay', 'التذكير' + (payUrgentList().length ? '<i class="dot blink"></i>' : ''))}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
+  function topBarHtml() {
+    const T = { home: 'محفظتي', pay: 'التذكير', month: 'الشهر', year: 'السنة', history: 'السجل', settings: 'الإعدادات', assistant: 'المساعد' };
+    return `<div class="topbar"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><b class="tbt">${T[ui.tab] || ''}</b><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>`;
+  }
+
   function render() {
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     ui._items = payItems();
     const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'pay' ? payHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
-    $('#app').innerHTML = updBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
+    $('#app').innerHTML = updBarHtml() + topBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
   }
