@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.8';
+  const APP_VERSION = '1.20.9';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -196,10 +196,12 @@
   }
   function accOptions(sel) { return accIds().map((a) => `<option value="${a}"${a === sel ? ' selected' : ''}>${accName(a)}</option>`).join(''); }
 
+  const draftDate = (d) => d.date || ymd(d.dateOffset ? startOfDay(Date.now()) + d.dateOffset * DAY : Date.now());
+  const draftDateHtml = (d) => `<div class="field"><label for="dd_date">تاريخ العملية</label><input id="dd_date" type="date" data-dd="date" value="${draftDate(d)}"></div>`;
   function draftHtml() {
     const d = ui.draft; if (!d) return '';
     if (d.kind === 'transfer') {
-      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} من ${accName(d.from)} إلى ${accName(d.to)}</div>
+      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} من ${accName(d.from)} إلى ${accName(d.to)}</div>${draftDateHtml(d)}
         <div class="row"><button class="btn primary grow" data-act="save-draft">تأكيد التحويل</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
     }
     const aiNote = d.ai === 'pending' ? '<div class="ok">بسأل Claude عشان أتأكد…</div>' : d.ai === 'done' ? '<div class="ok">Claude ساعدني في الفهم</div>' : d.ai === 'error' ? '<div class="warn">ما قدرتش أوصل لـClaude، اتصنّف محلياً.</div>' : '';
@@ -213,7 +215,7 @@
         <div class="seg" role="group" aria-label="النوع"><button class="${it.type === 'out' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="out">مصروف</button><button class="${it.type === 'in' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="in">دخل</button></div>
         ${msg}</div>`;
     }).join('');
-    return `<div class="card draft"><div class="h">راجع قبل الحفظ</div>${aiNote}${items}
+    return `<div class="card draft"><div class="h">راجع قبل الحفظ</div>${aiNote}${items}${draftDateHtml(d)}
       <div class="row"><button class="btn primary grow" data-act="save-draft">حفظ ${d.items.length > 1 ? 'الكل' : ''}</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
   }
 
@@ -409,8 +411,8 @@
       : `<div class="row stick"><button class="btn primary grow" data-act="tx-save">${sh.isNew ? 'حفظ' : 'حفظ التعديل'}</button>${sh.isNew ? '' : '<button class="btn red" data-act="tx-del-ask">حذف</button>'}<button class="btn ghost" data-act="close">${sh.isNew ? 'إلغاء' : 'إغلاق'}</button></div>`;
     return `<div class="h" style="font-size:18px">${sh.isNew ? 'إدخال يدوي' : isX ? 'تعديل تحويل' : 'تعديل عملية'}</div>${sh.isNew ? entryModeSeg('manual', isX) : ''}${typeSeg}
       <div class="row2"><input id="te_amount" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}">${isX ? '' : `<input id="te_label" data-te="label" placeholder="الوصف (مثال: غدا)" aria-label="الوصف" value="${esc(t.label)}">`}</div>${fields}
-      ${sh.isNew ? '' : `<div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
-      <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>`}${actions}`;
+      <div class="field"><label for="te_date">التاريخ</label><input id="te_date" type="date" data-te="date" value="${sh.date}"></div>
+      <div class="field"><label for="te_time">الوقت</label><input id="te_time" type="time" data-te="time" value="${sh.time}"></div>${actions}`;
   }
   function wordChipsHtml(sh) {
     const q = norm1(sh.filter); const all = engine.effectiveWords(sh.id); const words = all.filter((x) => !q || norm1(x.w).indexOf(q) >= 0).slice(0, 250);
@@ -642,7 +644,8 @@
 
   function saveDraft() {
     const d = ui.draft; if (!d) return; const now = Date.now();
-    const ts = d.dateOffset ? startOfDay(now) + d.dateOffset * DAY + 12 * 36e5 : now;
+    let ts = d.dateOffset ? startOfDay(now) + d.dateOffset * DAY + 12 * 36e5 : now;
+    if (d.date) { const q = d.date.split('-').map(Number); const t0 = new Date(q[0], (q[1] || 1) - 1, q[2] || 1).getTime(); if (!isNaN(t0)) ts = t0 === startOfDay(now) ? now : t0 + 12 * 36e5; }
     if (d.kind === 'transfer') {
       S.txs.push({ id: uid(), ts, type: 'xfer', amount: d.amount, acc: d.from, to: d.to, label: 'تحويل', cat: 'other' });
       ui.draft = null; ui.text = ''; save(); toast('اتسجل التحويل'); return;
@@ -670,7 +673,7 @@
       const am = parseFloat(toDigits(t.amount)); if (!(am > 0)) { toast('اكتب مبلغ صحيح'); return; }
       if (!t.acc || (t.type === 'xfer' && !t.to)) { toast(t.type === 'xfer' ? 'اختار الحساب اللي محوّل منه واللي محوّل له' : 'اختار الحساب الأول: نقدي أو محفظة أو انستا...'); sh.needAcc = true; render(); return; }
       const dq = (sh.date || '').split('-').map(Number); const tq = (sh.time || '00:00').split(':').map(Number);
-      const ts0 = Date.now(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
+      const ts0 = new Date(dq[0], (dq[1] || 1) - 1, dq[2] || 1, tq[0] || 0, tq[1] || 0).getTime(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
       else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc, sub: t.sub || '' }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, !!sh.catManual); if (lab && t.sub && sh.subManual) { const ad = engine.learnSub(lab, t.cat, t.sub); if (ad.length) subNote = `اتعلمت إن "${ad.join(' ')}" = ${engine.subName(t.cat, t.sub)}`; } }
       S.settings.lastAcc = t.acc; save(); ui.sheet = null; const advNote = afterSave(S.txs[S.txs.length - 1], sh.payFor); toast([subNote || 'اتسجلت العملية', advNote].filter(Boolean).join(' · ')); return;
@@ -1275,6 +1278,7 @@
     if (t.dataset.rc) { rcSet(t, false); return; }
     if (t.dataset.nd || t.dataset.sz) { if (ui.sheet) ui.sheet.date = t.value; return; }
     if (t.dataset.pe === 'new') { ui.peNew = t.value; return; }
+    if (t.dataset.dd) { if (ui.draft) ui.draft.date = t.value; return; }
     if (t.dataset.pn) { if (ui.sheet && ui.sheet.type === 'paynow') ui.sheet.amount = t.value; return; }
     if (t.dataset.na) { if (ui.sheet && ui.sheet.type === 'newacc') ui.sheet[t.dataset.na] = t.value; return; }
     if (t.dataset.nc) { if (ui.sheet && ui.sheet.type === 'newcat') ui.sheet[t.dataset.nc] = t.value; return; }
