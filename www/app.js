@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.7';
+  const APP_VERSION = '1.20.8';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -883,7 +883,13 @@
     const typeSeg = sh.mode === 'new' ? `<div class="seg" role="group" aria-label="النوع"><button class="${sh.ttype === 'out' ? 'on' : ''}" data-act="rc-type" data-v="out">مصروف</button><button class="${sh.ttype === 'in' ? 'on' : ''}" data-act="rc-type" data-v="in">دخل</button></div>` : '';
     const kindSeg = sh.mode === 'ask' ? '' : `<div class="seg" role="group" aria-label="نوع التذكير"><button class="${sh.jam ? '' : 'on'}" data-act="rc-kind" data-v="n">تذكير عادي</button><button class="${sh.jam ? 'on' : ''}" data-act="rc-kind" data-v="j">جمعية</button></div>`;
     const lead = sh.mode === 'ask' ? '' : `<div class="field col"><label>فكّرني قبل الميعاد بـ</label><div class="pick hs">${pickHtml(LEADS, String(sh.lead || 3), 'data-act="rc-lead"')}</div></div>`;
-    const presets = sh.mode === 'new' ? `<div class="field col"><label>${ui.presetEdit ? 'اضغط على أي اختيار لحذفه' : 'اختار حاجة من قايمتك أو اكتب بنفسك'}</label><div class="pick hs">${getPresets().map((x, i) => `<button type="button" class="pk" data-act="${ui.presetEdit ? 'rc-preset-del' : 'rc-preset'}" data-i="${i}">${ui.presetEdit ? '<span style="color:var(--red)">✕</span> ' : ''}${esc(x.n)}</button>`).join('') || '<span class="small">القايمة فاضية. اكتب اسم تذكير واحفظه.</span>'}</div><div class="row"><button type="button" class="btn ghost grow" data-act="rc-preset-save">+ احفظ التذكير ده في قايمتي</button><button type="button" class="btn ghost" data-act="rc-preset-edit">${ui.presetEdit ? 'تم' : '✎ تعديل القايمة'}</button></div></div>` : '';
+    const pl = getPresets(); const pOpen = !!ui.presetOpen; const pEd = !!ui.presetEdit;
+    const pRows = pl.map((x, i) => (pEd
+      ? `<div class="ddrow"><input class="ddin" data-pe="${i}" value="${esc(x.n)}" aria-label="اسم البند"><button type="button" class="btn ghost ddx" data-act="rc-preset-del" data-i="${i}" aria-label="حذف" style="color:var(--red)">✕</button></div>`
+      : `<button type="button" class="ddopt${sh.label === x.n ? ' on' : ''}" data-act="rc-preset" data-i="${i}">${esc(x.n)}</button>`)).join('') || '<div class="small">القايمة فاضية. أضف أول بند من تحت.</div>';
+    const presets = sh.mode === 'new' ? `<div class="field col"><label>اختار من قايمتك أو اكتب بنفسك</label>
+      <button type="button" class="ddhead" data-act="rc-preset-open" aria-expanded="${pOpen}"><span>${sh.label ? esc(sh.label) : 'اختار من القايمة'}</span><span aria-hidden="true">${pOpen ? '▴' : '▾'}</span></button>
+      ${pOpen ? `<div class="ddlist" role="listbox">${pRows}<div class="ddrow"><input class="ddin" id="pe_new" data-pe="new" placeholder="بند جديد: مثلاً كهرباء" value="${esc(ui.peNew || '')}"><button type="button" class="btn primary" data-act="rc-preset-add">+ إضافة</button></div><div class="row"><button type="button" class="btn ghost grow" data-act="rc-preset-save">+ احفظ التذكير ده في قايمتي</button><button type="button" class="btn ghost" data-act="rc-preset-edit">${pEd ? 'تم' : '✎ تعديل'}</button></div></div>` : ''}</div>` : '';
     const jamBox = `<div class="field col"><label for="rc_jtotal">عدد شهور الجمعية</label><input id="rc_jtotal" type="number" min="1" max="120" inputmode="numeric" data-rc="jtotal" value="${esc(sh.jtotal || '')}" placeholder="مثلاً 10"></div>
          <div class="field col"><label for="rc_day">يوم القسط من الشهر (1 إلى 31)</label><input id="rc_day" type="number" min="1" max="31" inputmode="numeric" data-rc="day" value="${sh.day}"></div>
          <div class="field col"><label for="rc_next">ميعاد القسط الجاي</label><input id="rc_next" type="date" data-rc="next" value="${ymd(sh.next)}"></div>${lead}
@@ -1128,7 +1134,7 @@
       case 'pay-ignore': S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('اتجاهلته. تقدر ترجّعه من آخر صفحة التذكير'); break;
       case 'pay-restore': S.payIgnore = S.payIgnore || {}; delete S.payIgnore[el.dataset.k]; save(); render(); break;
       case 'rc-ask': S.settings.askRecur = el.dataset.v; save(); render(); break;
-      case 'rc-new': ui.presetEdit = false; ui.sheet = { type: 'recur', mode: 'new', lead: 3, label: '', amount: '', ttype: 'out', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), every: 'pick', jam: false, jtotal: '', day: new Date().getDate(), next: nextFrom(new Date().getDate(), 'pick', 'new'), confirm: false }; render(); break;
+      case 'rc-new': ui.presetEdit = false; ui.presetOpen = false; ui.sheet = { type: 'recur', mode: 'new', lead: 3, label: '', amount: '', ttype: 'out', cat: 'other', sub: '', acc: validAcc(S.settings.lastAcc), every: 'pick', jam: false, jtotal: '', day: new Date().getDate(), next: nextFrom(new Date().getDate(), 'pick', 'new'), confirm: false }; render(); break;
       case 'rc-open': { const r = recOf(el.dataset.id); if (r) { ui.sheet = { type: 'recur', mode: 'edit', lead: r.lead || 3, id: r.id, label: r.label, amount: String(r.amount), ttype: r.type, cat: r.cat, sub: r.sub || '', acc: r.acc, every: r.every, day: r.day, next: r.next, jam: !!r.jam, jtotal: r.jam ? String(r.jam.total) : '', paid: r.jam ? r.jam.paid : 0, confirm: false }; render(); } break; }
       case 'rc-type': ui.sheet.ttype = el.dataset.v; render(); break;
       case 'rc-every': { const sh = ui.sheet; sh.every = (isStep(el.dataset.v) || el.dataset.v === 'once' || el.dataset.v === 'pick') ? el.dataset.v : +el.dataset.v; if (sh.every !== 0) sh.next = sh.mode === 'ask' ? nextFrom(sh.day, sh.every, 'ask') : (sh.next || nextFrom(sh.day, sh.every, 'new')); render(); break; }
@@ -1149,7 +1155,9 @@
       }
       case 'nd-none': { const sh = ui.sheet; S.recurring = S.recurring.filter((x) => x.id !== sh.id); save(); scheduleRecur(); ui.sheet = null; render(); toast('اتشال التذكير'); break; }
       case 'rc-lead': ui.sheet.lead = +el.dataset.v; render(); break;
-      case 'rc-preset': { const sh = ui.sheet; const x = getPresets()[+el.dataset.i]; if (!x) break; sh.label = x.n; sh.lead = x.lead || 3; sh.every = x.every === undefined ? 'pick' : x.every; sh.jam = /جمعي/.test(x.n); if (sh.jam) { sh.every = 1; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } if (x.amount > 0) sh.amount = String(x.amount); if (isStep(sh.every)) sh.next = nextFrom(sh.day, sh.every, 'new'); render(); break; }
+      case 'rc-preset': { ui.presetOpen = false; const sh = ui.sheet; const x = getPresets()[+el.dataset.i]; if (!x) break; sh.label = x.n; sh.lead = x.lead || 3; sh.every = x.every === undefined ? 'pick' : x.every; sh.jam = /جمعي/.test(x.n); if (sh.jam) { sh.every = 1; sh.lead = 3; sh.next = nextFrom(sh.day, 1, 'new'); } if (x.amount > 0) sh.amount = String(x.amount); if (isStep(sh.every)) sh.next = nextFrom(sh.day, sh.every, 'new'); render(); break; }
+      case 'rc-preset-open': ui.presetOpen = !ui.presetOpen; ui.presetEdit = false; render(); break;
+      case 'rc-preset-add': { const n = (ui.peNew || '').trim(); if (!n) { toast('اكتب اسم البند'); break; } const l = getPresets().filter((x) => x.n !== n); l.push({ n, every: 'pick', lead: 30, amount: 0 }); S.presets = l; ui.peNew = ''; save(); render(); toast('اتضاف للقايمة'); break; }
       case 'rc-preset-edit': ui.presetEdit = !ui.presetEdit; render(); break;
       case 'rc-preset-del': { const l = getPresets().slice(); l.splice(+el.dataset.i, 1); S.presets = l; save(); render(); break; }
       case 'rc-preset-save': { const sh = ui.sheet; const n = (sh.label || '').trim(); if (!n) { toast('اكتب اسم التذكير الأول'); break; } const l = getPresets().filter((x) => x.n !== n); const am = parseFloat(toDigits(sh.amount)) || 0; l.push({ n, every: sh.every === 0 ? 12 : sh.every, lead: sh.lead || 3, amount: am }); S.presets = l; save(); render(); toast('اتحفظ في قايمتك'); break; }
@@ -1266,6 +1274,7 @@
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.rc) { rcSet(t, false); return; }
     if (t.dataset.nd || t.dataset.sz) { if (ui.sheet) ui.sheet.date = t.value; return; }
+    if (t.dataset.pe === 'new') { ui.peNew = t.value; return; }
     if (t.dataset.pn) { if (ui.sheet && ui.sheet.type === 'paynow') ui.sheet.amount = t.value; return; }
     if (t.dataset.na) { if (ui.sheet && ui.sheet.type === 'newacc') ui.sheet[t.dataset.na] = t.value; return; }
     if (t.dataset.nc) { if (ui.sheet && ui.sheet.type === 'newcat') ui.sheet[t.dataset.nc] = t.value; return; }
@@ -1282,6 +1291,7 @@
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.rc) { rcSet(t, true); return; }
     if (t.dataset.nd || t.dataset.sz) { if (ui.sheet) ui.sheet.date = t.value; return; }
+    if (t.dataset.pe !== undefined && t.dataset.pe !== 'new') { const l = getPresets().slice(); const i = +t.dataset.pe; const n = t.value.trim(); if (l[i] && n) { l[i] = Object.assign({}, l[i], { n }); S.presets = l; save(); } render(); return; }
     if (t.dataset.ae && ui.sheet && ui.sheet.type === 'accedit') {
       const a = acctOf(ui.sheet.id); if (!a) return;
       if (t.dataset.ae === 'name') { const v = t.value.trim(); if (!v) { render(); return; } if (nameTaken(v, a.id)) { toast('فيه حساب بنفس الاسم'); render(); return; } applyAcct(() => { a.name = v; }); render(); }
