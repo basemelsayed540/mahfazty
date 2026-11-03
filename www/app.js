@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.3';
+  const APP_VERSION = '1.20.4';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -240,7 +240,10 @@
     const co = carryOver(y, m); const endBal = co.total + net;
     const carryCard = `<div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(co.total)}</b></div>${accIds().map((a) => `<div class="row between small"><span>${accName(a)}</span><span>${signed(co.per[a] || 0)}</span></div>`).join('')}<div class="row between" style="border-top:1px dashed var(--line);padding-top:8px"><span class="h">المتبقي آخر الشهر</span><b style="font-size:18px">${signed(endBal)}</b></div><div class="small">المتبقي آخر الشهر = المتبقي من الشهر السابق + دخل الشهر - مصروفه.</div></div>`;
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
-    return `<div class="screen">
+    const sod0 = startOfDay(Date.now());
+    const rng = [['آخر أسبوع', 7], ['آخر شهر', 30], ['آخر سنة', 365]].map((x) => { const from = sod0 - (x[1] - 1) * DAY; const l = S.txs.filter((t) => t.ts >= from && t.ts < sod0 + DAY); const i = sumBy(l, 'in'); const o = sumBy(l, 'out'); return `<div class="rngrow"><span class="rn">${x[0]}</span><span class="neg">-${fmt(o)}</span><span class="pos">+${fmt(i)}</span><span class="small">${i - o >= 0 ? '+' : '-'}${fmt(Math.abs(i - o))}</span></div>`; }).join('');
+    const rngCard = `<div class="card" style="display:flex;flex-direction:column;gap:6px"><div class="h">مصاريفي خلال أسبوع وشهر وسنة</div><div class="rngrow small"><span class="rn"></span><span>مصروف</span><span>دخل</span><span>الصافي</span></div>${rng}</div>`;
+    return `<div class="screen">${rngCard}
       <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       ${carryCard}
@@ -534,11 +537,11 @@
 
   function tabsHtml() {
     const t = (id, n) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${n}</button>`;
-    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('pay', 'التذكير' + (payUrgentList().length ? '<i class="dot blink"></i>' : ''))}${t('month', 'الشهر')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
+    return `<nav class="tabs"><div>${t('home', 'الرئيسية')}${t('pay', 'التذكير' + (payUrgentList().length ? '<i class="dot blink"></i>' : ''))}${t('month', 'إحصائية')}${t('assistant', 'المساعد')}${t('settings', 'الإعدادات' + (S.settings.seenVersion !== APP_VERSION ? '<i class="dot"></i>' : ''))}</div></nav>`;
   }
 
   function topBarHtml() {
-    const T = { home: 'محفظتي', pay: 'التذكير', month: 'الشهر', year: 'السنة', history: 'السجل', settings: 'الإعدادات', assistant: 'المساعد' };
+    const T = { home: 'محفظتي', pay: 'التذكير', month: 'إحصائية', year: 'السنة', history: 'السجل', settings: 'الإعدادات', assistant: 'المساعد' };
     return `<div class="topbar"><button class="reload" data-act="refresh-app" aria-label="تحديث التطبيق" title="تحديث التطبيق"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></button><b class="tbt">${T[ui.tab] || ''}</b><button class="reload" data-act="theme-toggle" aria-label="تبديل الوضع الداكن والعادي" title="الوضع الداكن / العادي"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>`;
   }
 
