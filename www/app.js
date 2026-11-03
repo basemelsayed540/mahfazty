@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.4';
+  const APP_VERSION = '1.20.5';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -240,10 +240,7 @@
     const co = carryOver(y, m); const endBal = co.total + net;
     const carryCard = `<div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(co.total)}</b></div>${accIds().map((a) => `<div class="row between small"><span>${accName(a)}</span><span>${signed(co.per[a] || 0)}</span></div>`).join('')}<div class="row between" style="border-top:1px dashed var(--line);padding-top:8px"><span class="h">المتبقي آخر الشهر</span><b style="font-size:18px">${signed(endBal)}</b></div><div class="small">المتبقي آخر الشهر = المتبقي من الشهر السابق + دخل الشهر - مصروفه.</div></div>`;
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
-    const sod0 = startOfDay(Date.now());
-    const rng = [['آخر أسبوع', 7], ['آخر شهر', 30], ['آخر سنة', 365]].map((x) => { const from = sod0 - (x[1] - 1) * DAY; const l = S.txs.filter((t) => t.ts >= from && t.ts < sod0 + DAY); const i = sumBy(l, 'in'); const o = sumBy(l, 'out'); return `<div class="rngrow"><span class="rn">${x[0]}</span><span class="neg">-${fmt(o)}</span><span class="pos">+${fmt(i)}</span><span class="small">${i - o >= 0 ? '+' : '-'}${fmt(Math.abs(i - o))}</span></div>`; }).join('');
-    const rngCard = `<div class="card" style="display:flex;flex-direction:column;gap:6px"><div class="h">مصاريفي خلال أسبوع وشهر وسنة</div><div class="rngrow small"><span class="rn"></span><span>مصروف</span><span>دخل</span><span>الصافي</span></div>${rng}</div>`;
-    return `<div class="screen">${rngCard}
+    return `<div class="screen">
       <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       ${carryCard}
@@ -251,6 +248,28 @@
         <div class="dow"><span>سبت</span><span>أحد</span><span>اثنين</span><span>ثلاثاء</span><span>أربعاء</span><span>خميس</span><span>جمعة</span></div><div class="days">${cells}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
+  }
+
+  function weekHtml() {
+    const sod0 = startOfDay(Date.now()); const from = sod0 - 6 * DAY; const arr = S.txs.filter((t) => t.ts >= from && t.ts < sod0 + DAY);
+    const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out'); const net = inc - out;
+    const days = []; for (let k = 6; k >= 0; k--) { const a = sod0 - k * DAY; const l = arr.filter((t) => t.ts >= a && t.ts < a + DAY); days.push({ a, o: sumBy(l, 'out'), i: sumBy(l, 'in') }); }
+    const mx = Math.max(1, ...days.map((d) => d.o));
+    const dayRows = days.map((d) => `<div style="display:flex;flex-direction:column;gap:3px"><div class="row between" style="font-size:13px;font-weight:600"><span>${PE.WEEKDAYS[new Date(d.a).getDay()]} ${new Date(d.a).getDate()} ${MONTHS[new Date(d.a).getMonth()]}</span><span><span class="neg">-${fmt(d.o)}</span>${d.i ? ` <span class="pos">+${fmt(d.i)}</span>` : ''}</span></div><div class="bar"><i style="width:${d.o / mx * 100}%;background:var(--redf)"></i></div></div>`).join('');
+    const cats = byCat(arr); const keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
+    const bars = keys.length ? keys.map((k) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}</span><span>${fmt(cats[k])}</span></div><div class="bar"><i style="width:${out ? cats[k] / out * 100 : 0}%;background:${catOf(k).color || 'var(--accentf)'}"></i></div></div>`).join('') : '<div class="small">مفيش مصروفات في آخر أسبوع.</div>';
+    const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
+    return `<div class="screen"><div class="nav" style="justify-content:center"><div style="text-align:center"><div style="font-size:20px;font-weight:800">آخر أسبوع</div><div class="small">من ${dLabel(from)} لحد النهارده</div></div></div>
+      <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف كل يوم</div>${dayRows}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
+  }
+  function statsHtml() {
+    const cur = ui.stTab || 'week';
+    const tabs = `<div class="seg" role="tablist" aria-label="فترة الإحصائية">${[['week', 'أسبوع'], ['month', 'شهر'], ['year', 'سنة']].map((x) => `<button role="tab" class="${cur === x[0] ? 'on' : ''}" data-act="st-tab" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+    const inner = (cur === 'year' ? yearHtml() : cur === 'month' ? monthHtml() : weekHtml()).replace(/^<div class="screen">/, '').replace(/<\/div>\s*$/, '');
+    return `<div class="screen">${tabs}${inner}</div>`;
   }
 
   function yearHtml() {
@@ -549,7 +568,7 @@
     const ae = document.activeElement; const keepFocus = ae && ae.id; const pos = ae && ae.selectionStart;
     const oldSheet = document.querySelector('.sheet'); const st = oldSheet ? oldSheet.scrollTop : 0;
     ui._items = payItems();
-    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'pay' ? payHtml() : ui.tab === 'month' ? monthHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
+    const body = ui.tab === 'home' ? homeHtml() : ui.tab === 'pay' ? payHtml() : ui.tab === 'month' ? statsHtml() : ui.tab === 'year' ? yearHtml() : ui.tab === 'history' ? historyHtml() : ui.tab === 'settings' ? settingsHtml() : assistantHtml();
     $('#app').innerHTML = updBarHtml() + topBarHtml() + body + tabsHtml() + sheetHtml() + (ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : '');
     const ns = document.querySelector('.sheet'); if (ns && ui.sheet === ui._lastSheet) ns.scrollTop = st; ui._lastSheet = ui.sheet;
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el && (!ui.sheet || el.dataset.keepfocus)) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ } } }
@@ -1200,7 +1219,8 @@
       case 'mnext': ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
       case 'yprev': ui.vy--; render(); break;
       case 'ynext': ui.vy++; render(); break;
-      case 'gomonth': ui.vm = { y: ui.vy, m: +el.dataset.m }; ui.tab = 'month'; render(); break;
+      case 'st-tab': ui.stTab = el.dataset.v; render(); break;
+      case 'gomonth': ui.vm = { y: ui.vy, m: +el.dataset.m }; ui.tab = 'month'; ui.stTab = 'month'; render(); break;
       case 'ask': ui.q = ($('#qinp') || {}).value || ui.q; doAsk(); break;
       case 'forget': engine.forget(el.dataset.k); save(); render(); break;
       case 'upd-dismiss': S.settings.seenVersion = APP_VERSION; save(); render(); break;
