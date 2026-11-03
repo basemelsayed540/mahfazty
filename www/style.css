@@ -167,6 +167,9 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .pay.urgent{border-color:var(--redf);border-width:2px;animation:payglow 1.6s ease-in-out infinite}
 .duebadge{font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px;background:var(--accent-soft);color:var(--accent)}
 .duebadge.hot{background:var(--redf);color:#fff}
+.pay.soon{border-color:#D4A017;border-width:2px;animation:payglowy 1.6s ease-in-out infinite}
+.duebadge.warnb{background:#FACC15;color:#3B2F00}
+@keyframes payglowy{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,.55)}50%{box-shadow:0 0 0 8px rgba(250,204,21,.55)}}
 .srcbadge{font-size:11px;font-weight:700;color:var(--mute);border:1px solid var(--line);border-radius:20px;padding:1px 8px}
 .payalert{width:100%;display:flex;align-items:center;gap:10px;text-align:right;border:2px solid var(--redf);color:var(--ink);font-size:14px;animation:payglow 1.6s ease-in-out infinite}
 .payalert .dot{width:12px;height:12px;margin:0}
@@ -174,7 +177,7 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .dot.blink{animation:payblink 1.1s ease-in-out infinite}
 @keyframes payblink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.5)}}
 @keyframes payglow{0%,100%{box-shadow:0 0 0 0 var(--o1)}50%{box-shadow:0 0 0 7px var(--o1)}}
-@media (prefers-reduced-motion: reduce){.pay.urgent,.payalert,.duecard,.dot.blink{animation:none}}
+@media (prefers-reduced-motion: reduce){.pay.soon,.pay.urgent,.payalert,.duecard,.dot.blink{animation:none}}
 
 /* قايمة الإدخال مدمجة علشان الكيبورد */
 .row2{display:flex;gap:8px}.row2 input{min-width:0;flex:1}.row2 input:first-child{flex:0 0 38%}

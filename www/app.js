@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.0';
+  const APP_VERSION = '1.20.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -1005,7 +1005,7 @@
   const payUrgentList = () => payList().filter(payUrgent);
   const payDateText = (ts) => { const d = new Date(ts); return `${PE.WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
   function payCard(it) {
-    const urgent = payUrgent(it); const isIn = it.type === 'in'; const rec = it.src === 'rec';
+    const lvl = it.pend || it.ignored ? '' : it.daysLeft <= 3 ? 'red' : it.daysLeft <= 7 ? 'yellow' : ''; const urgent = lvl === 'red'; const isIn = it.type === 'in'; const rec = it.src === 'rec';
     const ico = isIn ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>';
     const arrow = `<span class="arr ${isIn ? 'in' : 'out'}" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">${ico}</svg></span>`;
     const nm = it.label || catOf(it.cat).name; const k = esc(rec ? it.id : it.key);
@@ -1014,13 +1014,13 @@
     const more = rec
       ? `${it.pend ? '' : `<button class="btn ghost" data-act="rc-snooze" data-id="${k}">تأجيل</button>`}${it.pend || it.jam ? '' : `<button class="btn ghost" data-act="rc-skip" data-id="${k}">تخطي</button>`}<button class="btn ghost" data-act="rc-open" data-id="${k}">تعديل</button>`
       : `${canPin ? `<button class="btn ghost" data-act="pay-pin" data-k="${k}">ثبّت</button>` : ''}<button class="btn ghost" data-act="pay-ignore" data-k="${k}">تجاهل</button>`;
-    return `<div class="card pay${urgent ? ' urgent' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}${it.variable ? ' · مبلغه بيتغير' : ''}</div>${it.jam ? `<div class="small" style="font-weight:700">${esc(it.jam)}</div>` : ''}</div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${it.avg > 0 ? (isIn ? '+' : '-') + fmt(it.avg) : 'حدد المبلغ'}</div><div class="small">${rec ? '&nbsp;' : it.variable ? 'بين ' + fmt(it.min) + ' و ' + fmt(it.max) : 'تقريباً'}</div></div></div>
-      <div class="row between"><span class="duebadge${urgent ? ' hot' : ''}">${it.pend ? 'محتاج تحدد الميعاد الجاي' : PE.dueText(it.daysLeft)}${it.snz ? ' (مؤجّل)' : ''}</span><span class="small">${it.pend ? '' : payDateText(it.due)}</span><span class="srcbadge">${rec ? 'مؤكّد' : 'اكتشفته من عملياتك'}</span></div>
+    return `<div class="card pay${urgent ? ' urgent' : lvl === 'yellow' ? ' soon' : ''}"><div class="row between"><div class="row" style="gap:10px">${arrow}<div><div style="font-size:15px;font-weight:800">${esc(nm)}</div><div class="small">${esc(it.kind)}${rec ? '' : ' · من ' + it.count + ' مرات'}${it.variable ? ' · مبلغه بيتغير' : ''}</div>${it.jam ? `<div class="small" style="font-weight:700">${esc(it.jam)}</div>` : ''}</div></div><div style="text-align:left"><div class="${isIn ? 'pos' : 'neg'}">${it.avg > 0 ? (isIn ? '+' : '-') + fmt(it.avg) : 'حدد المبلغ'}</div><div class="small">${rec ? '&nbsp;' : it.variable ? 'بين ' + fmt(it.min) + ' و ' + fmt(it.max) : 'تقريباً'}</div></div></div>
+      <div class="row between"><span class="duebadge${urgent ? ' hot' : lvl === 'yellow' ? ' warnb' : ''}">${it.pend ? 'محتاج تحدد الميعاد الجاي' : PE.dueText(it.daysLeft)}${it.snz ? ' (مؤجّل)' : ''}</span><span class="small">${it.pend ? '' : payDateText(it.due)}</span><span class="srcbadge">${rec ? 'مؤكّد' : 'اكتشفته من عملياتك'}</span></div>
       ${it.jamPays ? `<details><summary class="small">تواريخ الدفع</summary>${it.jamPays}</details>` : ''}<div class="row" style="flex-wrap:wrap"><button class="btn ${isIn ? 'teal' : 'primary'} grow" ${doAct}>${it.pend ? 'حدد الميعاد الجاي' : isIn ? 'سجّل الاستلام' : it.jam ? 'دفعت الجمعية' : 'سجّل الدفع'}</button>${more}</div></div>`;
   }
   function payHtml() {
     const all = payList(); const live = all.filter((l) => !l.ignored); const ign = all.filter((l) => l.ignored);
-    const BK = [['today', 'النهارده', (l) => l.daysLeft <= 0], ['tomorrow', 'بكرة', (l) => l.daysLeft === 1], ['week', 'بعد أسبوع', (l) => l.daysLeft >= 2 && l.daysLeft <= 7], ['other', 'أخرى', (l) => l.daysLeft > 7]];
+    const BK = [['today', 'النهارده', (l) => l.daysLeft <= 0], ['tomorrow', 'بكرة', (l) => l.daysLeft === 1], ['week', 'خلال أسبوع', (l) => l.daysLeft >= 2 && l.daysLeft <= 7], ['other', 'أخرى', (l) => l.daysLeft > 7]];
     const cur = ui.payTab || 'today'; const bucketOf = (id) => BK.find((x) => x[0] === id) || BK[0];
     const inB = (id) => live.filter(bucketOf(id)[2]);
     const tabsBar = `<div class="seg" role="tablist" aria-label="مواعيد التذكير">${BK.map((x) => `<button role="tab" class="${cur === x[0] ? 'on' : ''}" data-act="pay-tab" data-v="${x[0]}">${x[1]}${inB(x[0]).length ? ` (${inB(x[0]).length})` : ''}</button>`).join('')}</div>`;
