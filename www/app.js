@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.5';
+  const APP_VERSION = '1.20.6';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -251,15 +251,21 @@
   }
 
   function weekHtml() {
-    const sod0 = startOfDay(Date.now()); const from = sod0 - 6 * DAY; const arr = S.txs.filter((t) => t.ts >= from && t.ts < sod0 + DAY);
+    const { y, m } = ui.vm; const dim = new Date(y, m + 1, 0).getDate(); const nW = Math.ceil(dim / 7); const now = new Date();
+    let sel = ui.stWeek; if (!(sel >= 0 && sel < nW)) sel = (now.getFullYear() === y && now.getMonth() === m) ? Math.min(nW - 1, Math.floor((now.getDate() - 1) / 7)) : 0;
+    const d1 = sel * 7 + 1; const d2 = Math.min(dim, d1 + 6);
+    const all = inMonth(y, m); const arr = all.filter((t) => { const d = new Date(t.ts).getDate(); return d >= d1 && d <= d2; });
     const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out'); const net = inc - out;
-    const days = []; for (let k = 6; k >= 0; k--) { const a = sod0 - k * DAY; const l = arr.filter((t) => t.ts >= a && t.ts < a + DAY); days.push({ a, o: sumBy(l, 'out'), i: sumBy(l, 'in') }); }
+    const days = []; for (let d = d1; d <= d2; d++) { const l = arr.filter((t) => new Date(t.ts).getDate() === d); days.push({ d, dt: new Date(y, m, d), o: sumBy(l, 'out'), i: sumBy(l, 'in') }); }
     const mx = Math.max(1, ...days.map((d) => d.o));
-    const dayRows = days.map((d) => `<div style="display:flex;flex-direction:column;gap:3px"><div class="row between" style="font-size:13px;font-weight:600"><span>${PE.WEEKDAYS[new Date(d.a).getDay()]} ${new Date(d.a).getDate()} ${MONTHS[new Date(d.a).getMonth()]}</span><span><span class="neg">-${fmt(d.o)}</span>${d.i ? ` <span class="pos">+${fmt(d.i)}</span>` : ''}</span></div><div class="bar"><i style="width:${d.o / mx * 100}%;background:var(--redf)"></i></div></div>`).join('');
+    const dayRows = days.map((d) => `<div style="display:flex;flex-direction:column;gap:3px"><div class="row between" style="font-size:13px;font-weight:600"><span>${PE.WEEKDAYS[d.dt.getDay()]} ${d.d} ${MONTHS[m]}</span><span><span class="neg">-${fmt(d.o)}</span>${d.i ? ` <span class="pos">+${fmt(d.i)}</span>` : ''}</span></div><div class="bar"><i style="width:${d.o / mx * 100}%;background:var(--redf)"></i></div></div>`).join('');
     const cats = byCat(arr); const keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
-    const bars = keys.length ? keys.map((k) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}</span><span>${fmt(cats[k])}</span></div><div class="bar"><i style="width:${out ? cats[k] / out * 100 : 0}%;background:${catOf(k).color || 'var(--accentf)'}"></i></div></div>`).join('') : '<div class="small">مفيش مصروفات في آخر أسبوع.</div>';
+    const bars = keys.length ? keys.map((k) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}</span><span>${fmt(cats[k])}</span></div><div class="bar"><i style="width:${out ? cats[k] / out * 100 : 0}%;background:${catOf(k).color}"></i></div></div>`).join('') : '<div class="small">مفيش مصروفات في الأسبوع ده.</div>';
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
-    return `<div class="screen"><div class="nav" style="justify-content:center"><div style="text-align:center"><div style="font-size:20px;font-weight:800">آخر أسبوع</div><div class="small">من ${dLabel(from)} لحد النهارده</div></div></div>
+    const wn = ['الأول', 'التاني', 'التالت', 'الرابع', 'الخامس'];
+    const chips = Array.from({ length: nW }, (_, k) => `<button role="tab" class="${k === sel ? 'on' : ''}" data-act="st-week" data-v="${k}">${wn[k]}</button>`).join('');
+    return `<div class="screen"><div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">الأسبوع ${wn[sel]}: من ${d1} لـ${d2} ${MONTHS[m]}</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
+      <div class="seg" role="tablist" aria-label="أسابيع الشهر">${chips}</div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف كل يوم</div>${dayRows}</div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
@@ -1215,11 +1221,12 @@
       case 'day': ui.sheet = { type: 'day', d: +el.dataset.d }; render(); break;
       case 'close': ui.sheet = null; render(); break;
       case 'del-tx': S.txs = S.txs.filter((t) => t.id !== el.dataset.id); ui.sheet = null; save(); render(); break;
-      case 'mprev': ui.vm.m--; if (ui.vm.m < 0) { ui.vm.m = 11; ui.vm.y--; } render(); break;
-      case 'mnext': ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
+      case 'mprev': ui.stWeek = undefined; ui.vm.m--; if (ui.vm.m < 0) { ui.vm.m = 11; ui.vm.y--; } render(); break;
+      case 'mnext': ui.stWeek = undefined; ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
       case 'yprev': ui.vy--; render(); break;
       case 'ynext': ui.vy++; render(); break;
       case 'st-tab': ui.stTab = el.dataset.v; render(); break;
+      case 'st-week': ui.stWeek = +el.dataset.v; render(); break;
       case 'gomonth': ui.vm = { y: ui.vy, m: +el.dataset.m }; ui.tab = 'month'; ui.stTab = 'month'; render(); break;
       case 'ask': ui.q = ($('#qinp') || {}).value || ui.q; doAsk(); break;
       case 'forget': engine.forget(el.dataset.k); save(); render(); break;
