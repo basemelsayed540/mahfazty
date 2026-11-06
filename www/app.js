@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.11';
+  const APP_VERSION = '1.20.12';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -62,6 +62,10 @@
   function dayLabel(ts) {
     const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY);
     if (diff === 0) return 'النهارده'; if (diff === 1) return 'امبارح'; const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  }
+  function dayFull(ts) {
+    const d = new Date(ts); const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY); const wd = PE.WEEKDAYS[d.getDay()]; const dt = `${wd} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    return diff === 0 ? `النهارده · ${dt}` : diff === 1 ? `امبارح · ${dt}` : dt;
   }
   function toast(msg, ms, kind) { ui.toast = msg; ui.toastKind = kind || ''; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { ui.toast = ''; const el = document.querySelector('.toast'); if (el) el.remove(); else render(); }, ms || 3200); }
 
@@ -103,6 +107,13 @@
     return `<div class="card updnote" role="status"><div class="h">اتحدّث التطبيق للنسخة ${esc(APP_VERSION)}</div><div class="small" style="margin:4px 0 8px">${cl ? esc(cl.title) : 'في مميزات جديدة'}</div><div class="row"><button class="btn primary grow" data-act="whatsnew">شوف الجديد</button><button class="btn ghost grow" data-act="upd-dismiss">تمام</button></div></div>`;
   }
 
+  function cardsHtml(b) {
+    const act = filterActive(); const fl = act ? filteredTxs(true) : null; const mv = {};
+    if (fl) fl.forEach((t) => { if (t.type === 'in') mv[t.acc] = (mv[t.acc] || 0) + t.amount; else if (t.type === 'out') mv[t.acc] = (mv[t.acc] || 0) - t.amount; else if (t.type === 'xfer') { mv[t.acc] = (mv[t.acc] || 0) - t.amount; mv[t.to] = (mv[t.to] || 0) + t.amount; } });
+    const tag = (ui.hp && ui.hp !== 'all' ? FNAME[ui.hp] : '') + (ui.hf && ui.hf !== 'all' ? ' ' + ({ out: 'مصروف', in: 'دخل', xfer: 'تحويل' })[ui.hf] : '') + (norm1(ui.hq) ? ' بحث' : '');
+    const cards = S.accounts.map((a) => { const v = act ? (mv[a.id] || 0) : (b[a.id] || 0); const txt = act ? (v > 0 ? '+' : v < 0 ? '-' : '') + fmt(Math.abs(v)) : fmt(v); const sel = ui.ha === a.id; return `<button class="acard${sel ? ' sel' : ''}" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${txt}"><span>${esc(a.name)}</span><b>${txt}</b></button>`; }).join('');
+    return `<div class="accs3">${cards}</div>${act ? `<div class="small" style="padding:0 4px;margin-top:-4px">الأرقام دي حركة الحسابات (${esc(tag.trim())}) بس. امسح الفلتر ترجع لرصيد كل حساب.</div>` : ''}`;
+  }
   function homeHtml() {
     const b = balances(); const total = S.accounts.reduce((x, a) => x + (b[a.id] || 0), 0);
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
@@ -110,7 +121,7 @@
       <div class="total"><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       <button class="card carry" data-act="tab" data-id="month" style="display:flex;justify-content:space-between;align-items:center"><span><span class="small" style="display:block">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(carryOver(nowD.getFullYear(), nowD.getMonth()).total)}</b></span><span class="small">التفاصيل ‹</span></button>
-      <div class="accs3">${S.accounts.map((a) => `<button class="acard" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${fmt(b[a.id] || 0)}"><span>${esc(a.name)}</span><b>${fmt(b[a.id] || 0)}</b></button>`).join('')}</div>
+      ${cardsHtml(b)}
       <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
         ${historyBodyHtml()}
@@ -121,18 +132,25 @@
     return `<div class="screen"><div class="h" style="font-size:20px;padding:4px">السجل</div>${historyBodyHtml()}</div>`;
   }
 
-  function historyBodyHtml() {
+  function filteredTxs(skipAcc) {
     const f = ui.hf || 'all'; const q = norm1(ui.hq);
     let arr = S.txs.slice().sort((a, b2) => b2.ts - a.ts);
     const hp = ui.hp || 'all'; const sod = startOfDay(Date.now()); const nowM = new Date(); const som = new Date(nowM.getFullYear(), nowM.getMonth(), 1).getTime();
     if (hp === 'today') arr = arr.filter((t) => t.ts >= sod); else if (hp === 'yest') arr = arr.filter((t) => t.ts >= sod - DAY && t.ts < sod); else if (hp === 'week') arr = arr.filter((t) => t.ts >= sod - 6 * DAY); else if (hp === 'month') arr = arr.filter((t) => t.ts >= som);
     if (f !== 'all') arr = arr.filter((t) => t.type === f);
-    if (ui.ha) arr = arr.filter((t) => t.acc === ui.ha || t.to === ui.ha);
+    if (ui.ha && !skipAcc) arr = arr.filter((t) => t.acc === ui.ha || t.to === ui.ha);
     if (q) arr = arr.filter((t) => norm1((t.label || '') + ' ' + catOf(t.cat).name + ' ' + engine.subName(t.cat, t.sub)).indexOf(q) >= 0 || String(t.amount) === q);
+    return arr;
+  }
+  const filterActive = () => (ui.hp || 'all') !== 'all' || (ui.hf || 'all') !== 'all' || !!norm1(ui.hq);
+  const FNAME = { today: 'اليوم', yest: 'أمس', week: 'أسبوع', month: 'الشهر' };
+  function historyBodyHtml() {
+    const f = ui.hf || 'all'; const hp = ui.hp || 'all';
+    const arr = filteredTxs(false);
     const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out');
     let html = ''; let last = '';
     const dayAgg = {}; arr.forEach((t) => { const k = ymd(t.ts); const a = dayAgg[k] || (dayAgg[k] = { n: 0, i: 0, o: 0 }); a.n++; if (t.type === 'in') a.i += t.amount; else if (t.type === 'out') a.o += t.amount; });
-    arr.slice(0, 300).forEach((t) => { const k = ymd(t.ts); if (k !== last) { last = k; const a = dayAgg[k]; html += `<div class="dayhead"><b>${esc(dayLabel(t.ts))}</b><span class="neg">${a.o ? '-' + fmt(a.o) : ''}</span><span class="pos">${a.i ? '+' + fmt(a.i) : ''}</span><span class="small">${a.n} عملية</span></div>`; } html += txRow(t); });
+    arr.slice(0, 300).forEach((t) => { const k = ymd(t.ts); if (k !== last) { last = k; const a = dayAgg[k]; html += `<div class="dayhead"><b>${esc(dayFull(t.ts))}</b><span class="neg">${a.o ? '-' + fmt(a.o) : ''}</span><span class="pos">${a.i ? '+' + fmt(a.i) : ''}</span><span class="small">${a.n} عملية</span></div>`; } html += txRow(t); });
     const seg = (id, n) => `<button class="${f === id ? 'on' : ''}" data-act="hf" data-v="${id}">${n}</button>`;
     const accSeg = `<div class="pick" role="group" aria-label="الحساب">${pickHtml([{ id: '', name: 'كل الحسابات' }].concat(accList()), ui.ha || '', 'data-act="ha"')}</div>`;
     return `<input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">
