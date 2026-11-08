@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.15';
+  const APP_VERSION = '1.20.16';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -264,8 +264,6 @@
       <div class="nav"><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div></div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       ${carryCard}
-      <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">أيام الشهر</span><span class="small">الغامق = صرف أكتر</span></div><div class="legend"><span><i style="background:var(--redf)"></i>مصروف</span><span><i style="background:var(--tealf)"></i>دخل</span><span><i class="bothi"></i>الاتنين</span></div>
-        <div class="dow"><span>سبت</span><span>أحد</span><span>اثنين</span><span>ثلاثاء</span><span>أربعاء</span><span>خميس</span><span>جمعة</span></div><div class="days">${cells}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
   }
@@ -311,7 +309,7 @@
     const cur = ui.stTab || 'week';
     const tabs = `<div class="seg" role="tablist" aria-label="فترة الإحصائية">${[['week', 'أسبوع'], ['month', 'شهر'], ['year', 'سنة']].map((x) => `<button role="tab" class="${cur === x[0] ? 'on' : ''}" data-act="st-tab" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
     const inner = (cur === 'year' ? yearHtml() : cur === 'month' ? monthHtml() : weekHtml()).replace(/^<div class="screen">/, '').replace(/<\/div>\s*$/, '');
-    return `<div class="screen">${tabs}${cur === 'year' ? yearChips() : monthChips()}${inner}</div>`;
+    return `<div class="screen">${tabs}${cur === 'year' ? yearChips() : cur === 'month' ? monthChips() : ''}${inner}</div>`;
   }
 
   function yearHtml() {
@@ -322,7 +320,7 @@
     }
     const act = nets.filter((n) => n.has); const best = act.length ? act.reduce((a, b) => (b.net > a.net ? b : a)) : null; const worst = act.length ? act.reduce((a, b) => (b.net < a.net ? b : a)) : null;
     const maxO = act.length ? act.reduce((a, b) => (b.o > a.o ? b : a)) : null;
-    const tiles = nets.map((n) => `<button class="mt ${!n.has ? 'n' : (best && n.m === best.m && act.length > 1 ? 'g' : (worst && n.m === worst.m && act.length > 1 ? 'w' : ''))}" data-act="gomonth" data-m="${n.m}"><b>${MONTHS[n.m]}</b><span>${n.has ? (n.net >= 0 ? '+' : '-') + fmt(Math.abs(n.net)) : '-'}</span></button>`).join('');
+    const tiles = nets.filter((n) => n.has || (y === now.getFullYear() && n.m === now.getMonth())).map((n) => `<button class="mt ${!n.has ? 'n' : (best && n.m === best.m && act.length > 1 ? 'g' : (worst && n.m === worst.m && act.length > 1 ? 'w' : ''))}" data-act="gomonth" data-m="${n.m}"><b>${MONTHS[n.m]}</b><span>${n.has ? (n.net >= 0 ? '+' : '-') + fmt(Math.abs(n.net)) : '-'}</span></button>`).join('');
     const yarr = S.txs.filter((t) => new Date(t.ts).getFullYear() === y);
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(yarr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
     const months = Math.max(1, y === now.getFullYear() ? now.getMonth() + 1 : (act.length || 1));
