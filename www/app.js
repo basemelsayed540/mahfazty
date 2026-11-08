@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.18';
+  const APP_VERSION = '1.20.19';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -1404,27 +1404,42 @@
     if (t) t.textContent = msg; if (b) { b.style.width = pct + '%'; if (b.parentNode) b.parentNode.setAttribute('aria-valuenow', String(Math.round(pct))); } if (pc) pc.textContent = Math.round(pct) + '%';
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const SSget = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const SSset = (k, v) => { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { /* ignore */ } };
+  async function hardReset() {
+    try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.unregister())); } } catch (e) { /* ignore */ }
+    try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) { /* ignore */ }
+  }
+  const reopen = () => { location.replace(location.pathname + '?u=' + Date.now()); };
   async function refreshApp() {
     if (ui.busyRefresh) return; ui.busyRefresh = true;
     updOverlay(3, 'جاري التحقق من الاتصال…');
-    let online = false;
+    let online = false; let target = '';
     try {
       const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
       const r = await fetch('changelog.json?_=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(tm); online = r.ok;
-    } catch (e) { online = false; }
+      if (online) { const j = await r.json(); target = j.latest || ''; }
+    } catch (e) { online = online && true; }
     if (!online) { const o = document.getElementById('updov'); if (o) o.remove(); ui.busyRefresh = false; toast('لا يوجد اتصال بالإنترنت. التطبيق شغال على نسخته الحالية وبياناتك محفوظة.', 4500); return; }
     updOverlay(10, 'جاري تحميل التحديث…');
-    const files = ['index.html', 'style.css', 'assistant.js', 'payments.js', 'app.js', 'changelog.json']; let cache = null;
-    try { cache = 'caches' in window ? await caches.open('mahfazty-cache') : null; } catch (e) { cache = null; }
+    const files = ['./', 'index.html', 'style.css', 'assistant.js', 'payments.js', 'app.js'];
     for (let k = 0; k < files.length; k++) {
-      try { const res = await fetch(files[k] + '?_=' + Date.now(), { cache: 'reload' }); if (res.ok && cache && files[k] !== 'changelog.json') await cache.put(files[k], res.clone()); } catch (e) { /* يكمل */ }
-      updOverlay(10 + (k + 1) / files.length * 75, 'جاري تحميل التحديث…');
+      try { await fetch(files[k], { cache: 'reload' }); } catch (e) { /* يكمل */ }
+      updOverlay(10 + (k + 1) / files.length * 70, 'جاري تحميل التحديث…');
     }
-    try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } } catch (e) { /* ignore */ }
+    updOverlay(85, 'جاري تنظيف النسخة القديمة…');
+    await hardReset();
+    SSset('mf_target', target); SSset('mf_try', '1');
     updOverlay(95, 'تمام. جاري إعادة تشغيل التطبيق…'); await sleep(500);
     updOverlay(100, 'إعادة التشغيل…'); await sleep(400);
-    location.reload();
+    reopen();
   }
+  (function verifyUpdate() {
+    const tg = SSget('mf_target'); if (!tg) return;
+    if (tg === APP_VERSION) { SSset('mf_target', null); SSset('mf_try', null); try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } setTimeout(() => toast(`اتحدّث التطبيق للإصدار ${APP_VERSION}`, 2500, 'in'), 400); return; }
+    if (SSget('mf_try') === '1') { SSset('mf_try', '2'); hardReset().then(reopen); return; }
+    SSset('mf_target', null); SSset('mf_try', null);
+  })();
   (function listenNotif() {
     const LN = cap('LocalNotifications'); if (!LN) return;
     LN.addListener('localNotificationActionPerformed', (ev) => {
