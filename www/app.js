@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.12';
+  const APP_VERSION = '1.20.13';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -136,7 +136,7 @@
     const f = ui.hf || 'all'; const q = norm1(ui.hq);
     let arr = S.txs.slice().sort((a, b2) => b2.ts - a.ts);
     const hp = ui.hp || 'all'; const sod = startOfDay(Date.now()); const nowM = new Date(); const som = new Date(nowM.getFullYear(), nowM.getMonth(), 1).getTime();
-    if (hp === 'today') arr = arr.filter((t) => t.ts >= sod); else if (hp === 'yest') arr = arr.filter((t) => t.ts >= sod - DAY && t.ts < sod); else if (hp === 'week') arr = arr.filter((t) => t.ts >= sod - 6 * DAY); else if (hp === 'month') arr = arr.filter((t) => t.ts >= som);
+    if (hp === 'today') arr = arr.filter((t) => t.ts >= sod); else if (hp === 'yest') arr = arr.filter((t) => t.ts >= sod - DAY && t.ts < sod); else if (hp === 'week') arr = arr.filter((t) => t.ts >= sod - ((new Date().getDay() + 1) % 7) * DAY); else if (hp === 'month') arr = arr.filter((t) => t.ts >= som);
     if (f !== 'all') arr = arr.filter((t) => t.type === f);
     if (ui.ha && !skipAcc) arr = arr.filter((t) => t.acc === ui.ha || t.to === ui.ha);
     if (q) arr = arr.filter((t) => norm1((t.label || '') + ' ' + catOf(t.cat).name + ' ' + engine.subName(t.cat, t.sub)).indexOf(q) >= 0 || String(t.amount) === q);
@@ -154,7 +154,7 @@
     const seg = (id, n) => `<button class="${f === id ? 'on' : ''}" data-act="hf" data-v="${id}">${n}</button>`;
     const accSeg = `<div class="pick" role="group" aria-label="الحساب">${pickHtml([{ id: '', name: 'كل الحسابات' }].concat(accList()), ui.ha || '', 'data-act="ha"')}</div>`;
     return `<input id="hq" aria-label="بحث" placeholder="ابحث بالوصف أو التصنيف أو المبلغ" value="${esc(ui.hq || '')}" style="border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:44px;padding:0 12px;font-size:15px;width:100%">
-      <div class="seg" role="group" aria-label="الفترة">${[['today', 'اليوم'], ['yest', 'أمس'], ['week', 'أسبوع'], ['month', 'شهر'], ['all', 'الكل']].map((x) => `<button class="${hp === x[0] ? 'on' : ''}" data-act="hp" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
+      <div class="seg" role="group" aria-label="الفترة">${[['today', 'اليوم'], ['yest', 'أمس'], ['week', 'الأسبوع'], ['month', 'شهر'], ['all', 'الكل']].map((x) => `<button class="${hp === x[0] ? 'on' : ''}" data-act="hp" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
       <div class="seg" role="group" aria-label="النوع">${seg('all', 'الكل')}${seg('out', 'مصروف')}${seg('in', 'دخل')}${seg('xfer', 'تحويل')}</div>${accSeg}
       <div class="card row between"><span class="small">${arr.length} عملية</span><span class="small">دخل <b class="pos">${fmt(inc)}</b> · مصروف <b class="neg">${fmt(out)}</b></span></div>
       ${html || '<div class="card small">' + (S.txs.length ? 'مفيش عمليات مطابقة.' : 'لسه مفيش عمليات. اضغط "إدخال" فوق وسجّل أول عملية.') + '</div>'}`;
