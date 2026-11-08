@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.13';
+  const APP_VERSION = '1.20.14';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -271,9 +271,10 @@
   }
 
   function weekHtml() {
-    const { y, m } = ui.vm; const dim = new Date(y, m + 1, 0).getDate(); const nW = Math.ceil(dim / 7); const now = new Date();
-    let sel = ui.stWeek; if (!(sel >= 0 && sel < nW)) sel = (now.getFullYear() === y && now.getMonth() === m) ? Math.min(nW - 1, Math.floor((now.getDate() - 1) / 7)) : 0;
-    const d1 = sel * 7 + 1; const d2 = Math.min(dim, d1 + 6);
+    const { y, m } = ui.vm; const dim = new Date(y, m + 1, 0).getDate(); const now = new Date();
+    const wr = []; for (let st = 1; st <= dim;) { const dow = (new Date(y, m, st).getDay() + 1) % 7; const en = Math.min(dim, st + (6 - dow)); wr.push([st, en]); st = en + 1; }
+    const nW = wr.length; let sel = ui.stWeek; if (!(sel >= 0 && sel < nW)) { sel = 0; if (now.getFullYear() === y && now.getMonth() === m) wr.forEach((r, k) => { if (now.getDate() >= r[0] && now.getDate() <= r[1]) sel = k; }); }
+    const d1 = wr[sel][0]; const d2 = wr[sel][1];
     const all = inMonth(y, m); const arr = all.filter((t) => { const d = new Date(t.ts).getDate(); return d >= d1 && d <= d2; });
     const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out'); const net = inc - out;
     const days = []; for (let d = d1; d <= d2; d++) { const l = arr.filter((t) => new Date(t.ts).getDate() === d); days.push({ d, dt: new Date(y, m, d), o: sumBy(l, 'out'), i: sumBy(l, 'in') }); }
@@ -282,7 +283,7 @@
     const cats = byCat(arr); const keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
     const bars = keys.length ? keys.map((k) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}</span><span>${fmt(cats[k])}</span></div><div class="bar"><i style="width:${out ? cats[k] / out * 100 : 0}%;background:${catOf(k).color}"></i></div></div>`).join('') : '<div class="small">مفيش مصروفات في الأسبوع ده.</div>';
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
-    const wn = ['الأول', 'التاني', 'التالت', 'الرابع', 'الخامس'];
+    const wn = ['الأول', 'التاني', 'التالت', 'الرابع', 'الخامس', 'السادس'];
     const chips = Array.from({ length: nW }, (_, k) => `<button role="tab" class="${k === sel ? 'on' : ''}" data-act="st-week" data-v="${k}">${wn[k]}</button>`).join('');
     return `<div class="screen"><div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">الأسبوع ${wn[sel]}: من ${d1} لـ${d2} ${MONTHS[m]}</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
       <div class="seg" role="tablist" aria-label="أسابيع الشهر">${chips}</div>
