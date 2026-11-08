@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.16';
+  const APP_VERSION = '1.20.17';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -268,21 +268,20 @@
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
   }
 
-  const hasTxIn = (y, m) => { const f = ui.mfilter === 'out' ? 'out' : null; return S.txs.some((t) => { const d = new Date(t.ts); return d.getFullYear() === y && d.getMonth() === m && (f ? t.type === 'out' : t.type !== 'xfer'); }); };
+  const hasTxIn = (y, m) => { return S.txs.some((t) => { const d = new Date(t.ts); return d.getFullYear() === y && d.getMonth() === m && t.type !== 'xfer'; }); };
   function monthChips() {
     const now = new Date(); const set = {}; const add = (y, m) => { set[y * 12 + m] = [y, m]; };
     for (let y = now.getFullYear() - 6; y <= now.getFullYear() + 1; y++) for (let m = 0; m < 12; m++) if (hasTxIn(y, m)) add(y, m);
     add(now.getFullYear(), now.getMonth()); add(ui.vm.y, ui.vm.m);
     const list = Object.keys(set).map(Number).sort((a, b) => a - b).map((k) => set[k]); const multi = new Set(list.map((x) => x[0])).size > 1;
     const chips = list.map((x) => `<button type="button" role="tab" class="${x[0] === ui.vm.y && x[1] === ui.vm.m ? 'on' : ''}" data-act="pick-month" data-y="${x[0]}" data-m="${x[1]}">${MONTHS[x[1]]}${multi ? ' ' + x[0] : ''}</button>`).join('');
-    return `<div class="seg chiprow" role="tablist" aria-label="الشهور اللي فيها عمليات">${chips}</div>${filterSeg()}`;
+    return `<div class="seg chiprow" role="tablist" aria-label="الشهور اللي فيها عمليات">${chips}</div>`;
   }
   function yearChips() {
-    const now = new Date(); const ys = {}; S.txs.forEach((t) => { if (t.type === 'xfer' || (ui.mfilter === 'out' && t.type !== 'out')) return; ys[new Date(t.ts).getFullYear()] = 1; }); ys[now.getFullYear()] = 1; ys[ui.vy] = 1;
+    const now = new Date(); const ys = {}; S.txs.forEach((t) => { if (t.type === 'xfer') return; ys[new Date(t.ts).getFullYear()] = 1; }); ys[now.getFullYear()] = 1; ys[ui.vy] = 1;
     const chips = Object.keys(ys).map(Number).sort((a, b) => a - b).map((y) => `<button type="button" role="tab" class="${y === ui.vy ? 'on' : ''}" data-act="pick-year" data-y="${y}">${y}</button>`).join('');
-    return `<div class="seg chiprow" role="tablist" aria-label="السنين اللي فيها عمليات">${chips}</div>${filterSeg()}`;
+    return `<div class="seg chiprow" role="tablist" aria-label="السنين اللي فيها عمليات">${chips}</div>`;
   }
-  const filterSeg = () => `<div class="seg" role="group" aria-label="نوع الشهور"><button class="${ui.mfilter === 'out' ? '' : 'on'}" data-act="mfilter" data-v="all">أي عمليات</button><button class="${ui.mfilter === 'out' ? 'on' : ''}" data-act="mfilter" data-v="out">فيها مصاريف بس</button></div>`;
   function weekHtml() {
     const { y, m } = ui.vm; const dim = new Date(y, m + 1, 0).getDate(); const now = new Date();
     const wr = []; for (let st = 1; st <= dim;) { const dow = (new Date(y, m, st).getDay() + 1) % 7; const en = Math.min(dim, st + (6 - dow)); wr.push([st, en]); st = en + 1; }
@@ -1269,7 +1268,6 @@
       case 'mnext': ui.stWeek = undefined; ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
       case 'pick-month': ui.vm = { y: +el.dataset.y, m: +el.dataset.m }; ui.stWeek = undefined; render(); break;
       case 'pick-year': ui.vy = +el.dataset.y; render(); break;
-      case 'mfilter': ui.mfilter = el.dataset.v; render(); break;
       case 'yprev': ui.vy--; render(); break;
       case 'ynext': ui.vy++; render(); break;
       case 'st-tab': ui.stTab = el.dataset.v; render(); break;
