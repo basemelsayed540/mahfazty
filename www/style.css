@@ -267,3 +267,5 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .acard.sel{outline:3px solid var(--ink);outline-offset:2px}
 .chiprow{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.chiprow::-webkit-scrollbar{display:none}.chiprow button{flex:1 0 auto;white-space:nowrap;min-width:64px}
 .chiprow.fit button{flex:1 1 0;min-width:0;padding:0 4px;font-size:13px}
+.balhead{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:start;min-height:64px}
+.balbody{display:flex;flex-direction:column;gap:10px}

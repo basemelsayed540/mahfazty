@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.19';
+  const APP_VERSION = '1.20.20';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -114,14 +114,18 @@
     const cards = S.accounts.map((a) => { const v = act ? (mv[a.id] || 0) : (b[a.id] || 0); const txt = act ? (v > 0 ? '+' : v < 0 ? '-' : '') + fmt(Math.abs(v)) : fmt(v); const sel = ui.ha === a.id; return `<button class="acard${sel ? ' sel' : ''}" style="background:${a.color}" data-act="acc" data-id="${a.id}" aria-label="${esc(a.name)} ${txt}"><span>${esc(a.name)}</span><b>${txt}</b></button>`; }).join('');
     return `<div class="accs3">${cards}</div>${act ? `<div class="small" style="padding:0 4px;margin-top:-4px">الأرقام دي حركة الحسابات (${esc(tag.trim())}) بس. امسح الفلتر ترجع لرصيد كل حساب.</div>` : ''}`;
   }
+  function balCardHtml(b, total, carry) {
+    const open = !!ui.balOpen;
+    const head = `<button type="button" class="card balhead" data-act="bal-toggle" aria-expanded="${open ? 'true' : 'false'}"><span><span class="small" style="display:block">رصيدي</span><b style="font-size:30px;line-height:1.15">${fmt(total)}</b></span><span class="small">${open ? 'إخفاء ▴' : 'التفاصيل ▾'}</span></button>`;
+    if (!open) return head;
+    return `${head}<div class="card balbody"><div class="row between" style="font-size:15px"><span class="muted" style="font-weight:600">المتبقي من الشهر السابق</span><b>${signed(carry)}</b></div>${cardsHtml(b)}</div>`;
+  }
   function homeHtml() {
     const b = balances(); const total = S.accounts.reduce((x, a) => x + (b[a.id] || 0), 0);
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
     return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}${payAlertHtml()}
-      <div class="total"><div class="tmid"><span class="small" style="font-size:14px">إجمالي رصيدك</span><b>${fmt(total)}</b></div></div>
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
-      <button class="card carry" data-act="tab" data-id="month" style="display:flex;justify-content:space-between;align-items:center"><span><span class="small" style="display:block">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(carryOver(nowD.getFullYear(), nowD.getMonth()).total)}</b></span><span class="small">التفاصيل ‹</span></button>
-      ${cardsHtml(b)}
+      ${balCardHtml(b, total, carryOver(nowD.getFullYear(), nowD.getMonth()).total)}
       <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
       <div style="display:flex;flex-direction:column;gap:6px"><div class="h" style="padding:0 4px">آخر العمليات</div>
         ${historyBodyHtml()}
@@ -1272,6 +1276,7 @@
       case 'yprev': ui.vy--; render(); break;
       case 'ynext': ui.vy++; render(); break;
       case 'st-tab': ui.stTab = el.dataset.v; render(); break;
+      case 'bal-toggle': ui.balOpen = !ui.balOpen; render(); break;
       case 'st-week': ui.stWeek = +el.dataset.v; render(); break;
       case 'gomonth': ui.vm = { y: ui.vy, m: +el.dataset.m }; ui.tab = 'month'; ui.stTab = 'month'; render(); break;
       case 'ask': ui.q = ($('#qinp') || {}).value || ui.q; doAsk(); break;
