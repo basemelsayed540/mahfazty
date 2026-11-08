@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.14';
+  const APP_VERSION = '1.20.15';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -261,7 +261,7 @@
     const carryCard = `<div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">المتبقي من الشهر السابق</span><b style="font-size:18px">${signed(co.total)}</b></div>${accIds().map((a) => `<div class="row between small"><span>${accName(a)}</span><span>${signed(co.per[a] || 0)}</span></div>`).join('')}<div class="row between" style="border-top:1px dashed var(--line);padding-top:8px"><span class="h">المتبقي آخر الشهر</span><b style="font-size:18px">${signed(endBal)}</b></div><div class="small">المتبقي آخر الشهر = المتبقي من الشهر السابق + دخل الشهر - مصروفه.</div></div>`;
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
     return `<div class="screen">
-      <div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
+      <div class="nav"><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">حساب الشهر</div></div></div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       ${carryCard}
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="row between"><span class="h">أيام الشهر</span><span class="small">الغامق = صرف أكتر</span></div><div class="legend"><span><i style="background:var(--redf)"></i>مصروف</span><span><i style="background:var(--tealf)"></i>دخل</span><span><i class="bothi"></i>الاتنين</span></div>
@@ -270,10 +270,25 @@
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="h">المصروف حسب البطاقة</div>${accs}</div></div>`;
   }
 
+  const hasTxIn = (y, m) => { const f = ui.mfilter === 'out' ? 'out' : null; return S.txs.some((t) => { const d = new Date(t.ts); return d.getFullYear() === y && d.getMonth() === m && (f ? t.type === 'out' : t.type !== 'xfer'); }); };
+  function monthChips() {
+    const now = new Date(); const set = {}; const add = (y, m) => { set[y * 12 + m] = [y, m]; };
+    for (let y = now.getFullYear() - 6; y <= now.getFullYear() + 1; y++) for (let m = 0; m < 12; m++) if (hasTxIn(y, m)) add(y, m);
+    add(now.getFullYear(), now.getMonth()); add(ui.vm.y, ui.vm.m);
+    const list = Object.keys(set).map(Number).sort((a, b) => a - b).map((k) => set[k]); const multi = new Set(list.map((x) => x[0])).size > 1;
+    const chips = list.map((x) => `<button type="button" role="tab" class="${x[0] === ui.vm.y && x[1] === ui.vm.m ? 'on' : ''}" data-act="pick-month" data-y="${x[0]}" data-m="${x[1]}">${MONTHS[x[1]]}${multi ? ' ' + x[0] : ''}</button>`).join('');
+    return `<div class="seg chiprow" role="tablist" aria-label="الشهور اللي فيها عمليات">${chips}</div>${filterSeg()}`;
+  }
+  function yearChips() {
+    const now = new Date(); const ys = {}; S.txs.forEach((t) => { if (t.type === 'xfer' || (ui.mfilter === 'out' && t.type !== 'out')) return; ys[new Date(t.ts).getFullYear()] = 1; }); ys[now.getFullYear()] = 1; ys[ui.vy] = 1;
+    const chips = Object.keys(ys).map(Number).sort((a, b) => a - b).map((y) => `<button type="button" role="tab" class="${y === ui.vy ? 'on' : ''}" data-act="pick-year" data-y="${y}">${y}</button>`).join('');
+    return `<div class="seg chiprow" role="tablist" aria-label="السنين اللي فيها عمليات">${chips}</div>${filterSeg()}`;
+  }
+  const filterSeg = () => `<div class="seg" role="group" aria-label="نوع الشهور"><button class="${ui.mfilter === 'out' ? '' : 'on'}" data-act="mfilter" data-v="all">أي عمليات</button><button class="${ui.mfilter === 'out' ? 'on' : ''}" data-act="mfilter" data-v="out">فيها مصاريف بس</button></div>`;
   function weekHtml() {
     const { y, m } = ui.vm; const dim = new Date(y, m + 1, 0).getDate(); const now = new Date();
     const wr = []; for (let st = 1; st <= dim;) { const dow = (new Date(y, m, st).getDay() + 1) % 7; const en = Math.min(dim, st + (6 - dow)); wr.push([st, en]); st = en + 1; }
-    const nW = wr.length; let sel = ui.stWeek; if (!(sel >= 0 && sel < nW)) { sel = 0; if (now.getFullYear() === y && now.getMonth() === m) wr.forEach((r, k) => { if (now.getDate() >= r[0] && now.getDate() <= r[1]) sel = k; }); }
+    wr.push([1, dim]); const nW = wr.length; let sel = ui.stWeek; if (!(sel >= 0 && sel < nW)) { sel = 0; if (now.getFullYear() === y && now.getMonth() === m) wr.slice(0, -1).forEach((r, k) => { if (now.getDate() >= r[0] && now.getDate() <= r[1]) sel = k; }); }
     const d1 = wr[sel][0]; const d2 = wr[sel][1];
     const all = inMonth(y, m); const arr = all.filter((t) => { const d = new Date(t.ts).getDate(); return d >= d1 && d <= d2; });
     const inc = sumBy(arr, 'in'); const out = sumBy(arr, 'out'); const net = inc - out;
@@ -284,9 +299,9 @@
     const bars = keys.length ? keys.map((k) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row between" style="font-size:13px;font-weight:600"><span>${esc(catOf(k).name)}</span><span>${fmt(cats[k])}</span></div><div class="bar"><i style="width:${out ? cats[k] / out * 100 : 0}%;background:${catOf(k).color}"></i></div></div>`).join('') : '<div class="small">مفيش مصروفات في الأسبوع ده.</div>';
     const accs = accIds().map((a) => `<div class="row between" style="font-size:14px"><span class="muted" style="font-weight:600">${accName(a)}</span><b>${fmt(arr.filter((t) => t.type === 'out' && t.acc === a).reduce((s, t) => s + t.amount, 0))}</b></div>`).join('');
     const wn = ['الأول', 'التاني', 'التالت', 'الرابع', 'الخامس', 'السادس'];
-    const chips = Array.from({ length: nW }, (_, k) => `<button role="tab" class="${k === sel ? 'on' : ''}" data-act="st-week" data-v="${k}">${wn[k]}</button>`).join('');
-    return `<div class="screen"><div class="nav"><button data-act="mprev" aria-label="الشهر السابق">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">الأسبوع ${wn[sel]}: من ${d1} لـ${d2} ${MONTHS[m]}</div></div><button data-act="mnext" aria-label="الشهر التالي">‹</button></div>
-      <div class="seg" role="tablist" aria-label="أسابيع الشهر">${chips}</div>
+    const chips = Array.from({ length: nW }, (_, k) => `<button role="tab" class="${k === sel ? 'on' : ''}" data-act="st-week" data-v="${k}">${k === nW - 1 ? 'الكل' : wn[k]}</button>`).join('');
+    return `<div class="screen"><div class="nav"><div style="text-align:center"><div style="font-size:20px;font-weight:800">${MONTHS[m]} ${y}</div><div class="small">${sel === nW - 1 ? 'الشهر كله' : 'الأسبوع ' + wn[sel]}: من ${d1} لـ${d2} ${MONTHS[m]}</div></div></div>
+      <div class="seg chiprow fit" role="tablist" aria-label="أسابيع الشهر">${chips}</div>
       <div class="tiles3"><div class="tile" style="background:var(--tealf)"><small>دخل</small><b>${fmt(inc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف</small><b>${fmt(out)}</b></div><div class="tile" style="background:var(--purplef)"><small>الصافي</small><b>${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</b></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف كل يوم</div>${dayRows}</div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="h">المصروف حسب التصنيف</div>${bars}</div>
@@ -296,7 +311,7 @@
     const cur = ui.stTab || 'week';
     const tabs = `<div class="seg" role="tablist" aria-label="فترة الإحصائية">${[['week', 'أسبوع'], ['month', 'شهر'], ['year', 'سنة']].map((x) => `<button role="tab" class="${cur === x[0] ? 'on' : ''}" data-act="st-tab" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
     const inner = (cur === 'year' ? yearHtml() : cur === 'month' ? monthHtml() : weekHtml()).replace(/^<div class="screen">/, '').replace(/<\/div>\s*$/, '');
-    return `<div class="screen">${tabs}${inner}</div>`;
+    return `<div class="screen">${tabs}${cur === 'year' ? yearChips() : monthChips()}${inner}</div>`;
   }
 
   function yearHtml() {
@@ -313,7 +328,7 @@
     const months = Math.max(1, y === now.getFullYear() ? now.getMonth() + 1 : (act.length || 1));
     const saving = inc ? Math.round((inc - out) / inc * 100) : 0;
     return `<div class="screen">
-      <div class="nav"><button data-act="yprev" aria-label="السنة السابقة">›</button><div style="text-align:center"><div style="font-size:20px;font-weight:800">سنة ${y}</div><div class="small">حساب السنة</div></div><button data-act="ynext" aria-label="السنة التالية">‹</button></div>
+      <div class="nav"><div style="text-align:center"><div style="font-size:20px;font-weight:800">سنة ${y}</div><div class="small">حساب السنة</div></div></div>
       <div style="background:var(--purplef);color:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:13px;font-weight:600">توفير السنة</div><div style="font-size:36px;font-weight:800;line-height:1.15">${inc - out >= 0 ? '+' : '-'}${fmt(Math.abs(inc - out))} <span style="font-size:16px;font-weight:600"></span></div><div class="row between" style="font-size:13px;font-weight:700;padding-top:6px"><span>دخل ${fmt(inc)}</span><span>مصروف ${fmt(out)}</span></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="row between"><span class="h">صافي كل شهر</span><span class="small">أخضر = الأفضل · أحمر = الأقل</span></div><div class="mgrid">${tiles}</div></div>
       <div class="tiles2"><div class="stat"><small>متوسط المصروف شهرياً</small><b>${fmt(out / months)}</b></div><div class="stat"><small>نسبة التوفير</small><b style="color:var(--teal)">${saving}%</b></div>
@@ -1254,6 +1269,9 @@
       case 'del-tx': S.txs = S.txs.filter((t) => t.id !== el.dataset.id); ui.sheet = null; save(); render(); break;
       case 'mprev': ui.stWeek = undefined; ui.vm.m--; if (ui.vm.m < 0) { ui.vm.m = 11; ui.vm.y--; } render(); break;
       case 'mnext': ui.stWeek = undefined; ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
+      case 'pick-month': ui.vm = { y: +el.dataset.y, m: +el.dataset.m }; ui.stWeek = undefined; render(); break;
+      case 'pick-year': ui.vy = +el.dataset.y; render(); break;
+      case 'mfilter': ui.mfilter = el.dataset.v; render(); break;
       case 'yprev': ui.vy--; render(); break;
       case 'ynext': ui.vy++; render(); break;
       case 'st-tab': ui.stTab = el.dataset.v; render(); break;

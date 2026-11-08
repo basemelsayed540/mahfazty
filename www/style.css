@@ -265,3 +265,5 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 @keyframes needglow{0%,100%{box-shadow:0 0 0 0 rgba(29,111,216,.55);border-color:#1D6FD8}50%{box-shadow:0 0 0 8px rgba(29,111,216,.25);border-color:#6FA8F5}}
 @media (prefers-reduced-motion: reduce){.needacc{animation:none}}
 .acard.sel{outline:3px solid var(--ink);outline-offset:2px}
+.chiprow{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.chiprow::-webkit-scrollbar{display:none}.chiprow button{flex:1 0 auto;white-space:nowrap;min-width:64px}
+.chiprow.fit button{flex:1 1 0;min-width:0;padding:0 4px;font-size:13px}
