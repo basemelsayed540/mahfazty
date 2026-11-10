@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.20';
+  const APP_VERSION = '1.20.21';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -123,7 +123,7 @@
   function homeHtml() {
     const b = balances(); const total = S.accounts.reduce((x, a) => x + (b[a.id] || 0), 0);
     const nowD = new Date(); const marr = inMonth(nowD.getFullYear(), nowD.getMonth()); const minc = sumBy(marr, 'in'); const mout = sumBy(marr, 'out');
-    return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}${payAlertHtml()}
+    return `<div class="screen">${bannerHtml()}${updNoteHtml()}${recurDueHtml()}${payAlertHtml()}${insightHtml()}
       <div class="tiles2"><div class="tile" style="background:var(--tealf)"><small>دخل ${MONTHS[nowD.getMonth()]}</small><b>+${fmt(minc)}</b></div><div class="tile" style="background:var(--redf)"><small>مصروف ${MONTHS[nowD.getMonth()]}</small><b>-${fmt(mout)}</b></div></div>
       ${balCardHtml(b, total, carryOver(nowD.getFullYear(), nowD.getMonth()).total)}
       <button class="btn primary big" data-act="add-tx" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إدخال مصروف أو دخل</button>
@@ -1056,9 +1056,17 @@
   // أرقام الإشعارات: تذكير المصاريف أقل من 20000، المكتشف تلقائياً من 20000 لـ99999، الدفعات المؤكدة من 100000
   const PAY_ID0 = 20000;
   const payStrip = (v) => norm1(v).replace(/[0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function subCatName(cat, sub) { if (sub) { const x = engine.subsOf(cat).find((q) => q.id === sub); if (x && x.name) return x.name; } return catOf(cat).name; }
+  const KIND_WORD = { week: 'كل أسبوع تقريباً', fortnight: 'كل أسبوعين تقريباً', day: 'كل يوم', month: 'كل شهر', year: 'كل سنة' };
+  function insightList() { return payAuto().filter((l) => !l.ignored && l.count >= 3 && (l.pattern.kind === 'week' || l.pattern.kind === 'fortnight') && !(S.seenAuto || {})[l.key] && !autoCovered(l) && !autoBlocked(l)); }
+  function insightHtml() {
+    const l = insightList()[0]; if (!l) return '';
+    const nm = esc(l.label || catOf(l.cat).name);
+    return `<div class="card insight" role="status"><div class="row" style="gap:10px;align-items:flex-start"><span aria-hidden="true" style="font-size:22px">💡</span><div class="grow"><b>لاحظت إنك بتسجّل ${nm} ${KIND_WORD[l.pattern.kind]}</b><div class="small">${l.variable ? 'المبلغ بيتغير بين ' + fmt(l.min) + ' و' + fmt(l.max) : 'حوالي ' + fmt(l.avg)}. الميعاد الجاي ${payDateText(l.due)}. تحب أفكّرك قبلها؟</div></div></div><div class="row"><button class="btn primary grow" data-act="insight-ok" data-k="${esc(l.key)}">تمام، ذكّرني</button><button class="btn ghost" data-act="insight-no" data-k="${esc(l.key)}">لأ، متفكّرنيش</button></div></div>`;
+  }
   function payAuto() {
     const d = startOfDay(Date.now());
-    if (!autoCache || autoCache.d !== d) { let v = []; try { v = PE.compute(S.txs, Date.now(), norm1, S.payIgnore || {}); } catch (e) { v = []; } autoCache = { d, v }; }
+    if (!autoCache || autoCache.d !== d) { let v = []; try { v = PE.compute(S.txs, Date.now(), norm1, S.payIgnore || {}, subCatName); } catch (e) { v = []; } autoCache = { d, v }; }
     return autoCache.v;
   }
   // هل فيه دفعة مؤكدة (من سؤال التكرار) بتغطي العنصر المكتشف؟ عشان ما يتعرضش مرتين
@@ -1149,6 +1157,9 @@
           if (!l.daily) mk(0, pre, `بعد ${PE.SOON} أيام ميعاد ${what} ${name} (حوالي ${amt}${vr})`);
           mk(1, due, `النهارده ميعاد ${what} ${name} (حوالي ${amt}${vr})`);
         });
+        const fresh = insightList().filter((l) => !(S.notifiedAuto || {})[l.key]).slice(0, 3);
+        fresh.forEach((l, i) => { list.push({ id: 19000 + i, title: 'محفظتي', body: `لاحظت إنك بتسجّل ${l.label || catOf(l.cat).name} ${KIND_WORD[l.pattern.kind]}. افتح التطبيق لو عايزني أفكّرك.`, channelId: 'payments', schedule: { at: new Date(now + 10000), allowWhileIdle: true } }); });
+        if (fresh.length) { S.notifiedAuto = S.notifiedAuto || {}; fresh.forEach((l) => { S.notifiedAuto[l.key] = true; }); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e2) { /* ignore */ } }
         if (!list.length) return;
         let perm = await LN.checkPermissions(); if (perm.display !== 'granted') perm = await LN.requestPermissions(); if (perm.display !== 'granted') return;
         await LN.createChannel({ id: 'payments', name: 'تذكير المدفوعات المكتشفة', description: 'تنبيه قبل مواعيد المدفوعات والدخل المتكرر اللي اكتشفها التطبيق', importance: 5, visibility: 1, vibration: true, lights: true });
@@ -1170,6 +1181,8 @@
       case 'pay-tab': ui.payTab = el.dataset.v; render(); break;
       case 'pay-do': payDo(el.dataset.k); break;
       case 'pay-pin': payPin(el.dataset.k); break;
+      case 'insight-ok': S.seenAuto = S.seenAuto || {}; S.seenAuto[el.dataset.k] = true; save(); render(); toast('تمام، هفكّرك في ميعادها', 2200, 'info'); break;
+      case 'insight-no': S.seenAuto = S.seenAuto || {}; S.seenAuto[el.dataset.k] = true; S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('تمام، مش هفكّرك. تقدر ترجّعها من آخر صفحة التذكير', 3200); break;
       case 'pay-ignore': S.payIgnore = S.payIgnore || {}; S.payIgnore[el.dataset.k] = true; save(); render(); toast('اتجاهلته. تقدر ترجّعه من آخر صفحة التذكير'); break;
       case 'pay-restore': S.payIgnore = S.payIgnore || {}; delete S.payIgnore[el.dataset.k]; save(); render(); break;
       case 'rc-ask': S.settings.askRecur = el.dataset.v; save(); render(); break;

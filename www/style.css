@@ -269,3 +269,4 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .chiprow.fit button{flex:1 1 0;min-width:0;padding:0 4px;font-size:13px}
 .balhead{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:start;min-height:64px}
 .balbody{display:flex;flex-direction:column;gap:10px}
+.insight{border:2px solid #1D6FD8;background:var(--card);display:flex;flex-direction:column;gap:10px}

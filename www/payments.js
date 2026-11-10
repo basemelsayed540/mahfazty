@@ -31,6 +31,7 @@
     for (let i = 1; i < n; i++) { gaps.push(Math.round((days[i] - days[i - 1]) / DAY)); mg.push(monthIdx(days[i]) - monthIdx(days[i - 1])); }
     if (n >= 4 && gaps.every((g) => g === 1)) return { kind: 'day', step: 1, maxAge: MAX_AGE.day };
     if (n >= 3 && gaps.every((g) => near(g, 7, 1))) return { kind: 'week', step: 7, maxAge: MAX_AGE.week };
+    if (n >= 3 && median(gaps) >= 6 && median(gaps) <= 8 && gaps.filter((g) => near(g, 7, 2)).length >= Math.ceil(gaps.length * 0.75)) return { kind: 'week', step: 7, maxAge: MAX_AGE.week };
     if (n >= 3 && gaps.every((g) => near(g, 14, 2))) return { kind: 'fortnight', step: 14, maxAge: MAX_AGE.fortnight };
     const doms = days.map((d) => new Date(d).getDate());
     const eom = doms.every((d) => d >= 28);
@@ -49,14 +50,20 @@
   }
 
   /* txs: كل العمليات. ignore: { مفتاح: true }. بيرجّع القائمة مرتبة بالأقرب موعداً */
-  function compute(txs, now, norm, ignore) {
+  function compute(txs, now, norm, ignore, nameOf) {
     const today = sod(now); const groups = {}; const out = [];
     (txs || []).forEach((t) => { if (t.type !== 'in' && t.type !== 'out') return; const k = keyOf(t, norm); if (k) (groups[k] = groups[k] || []).push(t); });
+    /* مستوى النوع: بنزين أو طعام أو أي تصنيف بيتكرر أسبوعياً حتى لو الوصف أو المبلغ مختلف */
+    const catGroups = {};
+    (txs || []).forEach((t) => { if (t.type !== 'out' || !t.cat || NOLABEL_CATS.indexOf(t.cat) >= 0) return; const k = 't|~' + t.cat + '|' + (t.sub || ''); (catGroups[k] = catGroups[k] || []).push(t); });
+    Object.keys(catGroups).forEach((k) => { groups[k] = catGroups[k]; });
     Object.keys(groups).forEach((k) => {
       const byDay = {};
       groups[k].forEach((t) => { const d = sod(t.ts); const e = byDay[d] || (byDay[d] = { amt: 0, last: t }); e.amt += t.amount; if (t.ts >= e.last.ts) e.last = t; });
       const days = Object.keys(byDay).map(Number).sort((a, b) => a - b).slice(-6);
+      const isCat = k.indexOf('t|~') === 0;
       const p = detect(days); if (!p) return;
+      if (isCat && p.kind !== 'week' && p.kind !== 'fortnight') return;
       const lastDay = days[days.length - 1]; if (today - lastDay > p.maxAge * DAY) return;
       let due = nextAfter(p, lastDay); let guard = 0;
       while (due < today - LATE_GRACE * DAY && guard++ < 80) due = nextAfter(p, due);
@@ -64,10 +71,13 @@
       const recent = days.slice(-3).map((d) => byDay[d].amt); const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
       const all = days.map((d) => byDay[d].amt); const mn = Math.min.apply(null, all); const mx = Math.max.apply(null, all); const variable = all.length >= 3 && (mx - mn) / (avg || 1) > 0.12;
       const lt = byDay[lastDay].last;
-      out.push({ key: k, type: lt.type, label: (lt.label || '').trim(), cat: lt.cat, sub: lt.sub || '', acc: lt.acc, avg: Math.round(avg * 100) / 100, min: Math.round(mn * 100) / 100, max: Math.round(mx * 100) / 100, variable, count: days.length, pattern: p, last: lastDay, due, daysLeft, ignored: !!(ignore && ignore[k]) });
+      out.push({ key: k, catLevel: isCat, type: lt.type, label: isCat ? ((nameOf && nameOf(lt.cat, lt.sub || '')) || '') : (lt.label || '').trim(), cat: lt.cat, sub: lt.sub || '', acc: lt.acc, avg: Math.round(avg * 100) / 100, min: Math.round(mn * 100) / 100, max: Math.round(mx * 100) / 100, variable, count: days.length, pattern: p, last: lastDay, due, daysLeft, ignored: !!(ignore && ignore[k]) });
     });
-    out.sort((a, b) => a.due - b.due);
-    return out;
+    /* لو نفس النوع اتكتشف بوصفه فمش هنكرره على مستوى النوع */
+    const seen = {}; out.forEach((x) => { if (!x.catLevel) seen[x.cat + '|' + x.sub + '|' + x.pattern.kind] = 1; });
+    const res = out.filter((x) => !(x.catLevel && seen[x.cat + '|' + x.sub + '|' + x.pattern.kind]));
+    res.sort((a, b) => a.due - b.due);
+    return res;
   }
 
   function dueText(n) {
