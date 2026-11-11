@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.21';
+  const APP_VERSION = '1.20.22';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -595,7 +595,8 @@
       body = `<div class="h">استيراد نسخة احتياطية</div><div class="small warn">ده هيستبدل كل بياناتك الحالية.</div><textarea id="imp" placeholder="الصق النص هنا"></textarea>
         <div class="row"><button class="btn primary grow" data-act="do-import">استيراد</button><button class="btn ghost grow" data-act="close">إلغاء</button></div>`;
     }
-    return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">${body}</div></div>`;
+    const head = sh.type === 'onboard' || body.indexOf('aria-label="رجوع"') >= 0 ? '' : `<div class="sheethead"><button type="button" class="backbtn" data-act="sheet-back" aria-label="رجوع"><span aria-hidden="true">→</span> رجوع</button></div>`;
+    return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">${head}${body}</div></div>`;
   }
 
   function tabsHtml() {
@@ -1281,6 +1282,7 @@
       case 'nc-create': createCategory(); break;
       case 'day': ui.sheet = { type: 'day', d: +el.dataset.d }; render(); break;
       case 'close': ui.sheet = null; render(); break;
+      case 'sheet-back': { const sh = ui.sheet; if (sh && sh.type === 'sub') ui.sheet = { type: 'cat', id: sh.cat, filter: '', confirm: false, moveTo: 'other' }; else ui.sheet = null; render(); break; }
       case 'del-tx': S.txs = S.txs.filter((t) => t.id !== el.dataset.id); ui.sheet = null; save(); render(); break;
       case 'mprev': ui.stWeek = undefined; ui.vm.m--; if (ui.vm.m < 0) { ui.vm.m = 11; ui.vm.y--; } render(); break;
       case 'mnext': ui.stWeek = undefined; ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
@@ -1452,6 +1454,14 @@
     updOverlay(100, 'إعادة التشغيل…'); await sleep(400);
     reopen();
   }
+  (function hwBack() {
+    const App = cap('App'); if (!App || !App.addListener) return;
+    App.addListener('backButton', () => {
+      if (ui.sheet && ui.sheet.type !== 'onboard') { if (ui.sheet.type === 'sub') ui.sheet = { type: 'cat', id: ui.sheet.cat, filter: '', confirm: false, moveTo: 'other' }; else ui.sheet = null; render(); return; }
+      if (ui.tab !== 'home') { ui.tab = 'home'; render(); return; }
+      if (App.minimizeApp) App.minimizeApp();
+    });
+  })();
   (function verifyUpdate() {
     const tg = SSget('mf_target'); if (!tg) return;
     if (tg === APP_VERSION) { SSset('mf_target', null); SSset('mf_try', null); try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } setTimeout(() => toast(`اتحدّث التطبيق للإصدار ${APP_VERSION}`, 2500, 'in'), 400); return; }

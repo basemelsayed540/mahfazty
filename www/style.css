@@ -270,3 +270,5 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .balhead{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:start;min-height:64px}
 .balbody{display:flex;flex-direction:column;gap:10px}
 .insight{border:2px solid #1D6FD8;background:var(--card);display:flex;flex-direction:column;gap:10px}
+.sheethead{position:sticky;top:-12px;z-index:2;background:var(--bg);margin:-12px -14px 0;padding:10px 14px 6px;display:flex}
+.backbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;min-height:44px;padding:0 14px;font-size:15px;font-weight:700;display:inline-flex;align-items:center;gap:8px}
