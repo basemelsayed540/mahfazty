@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.22';
+  const APP_VERSION = '1.20.23';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -198,8 +198,8 @@
 
   function txRow(t) {
     const arrow = (k) => `<span class="arr ${k}" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">${k === 'in' ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : k === 'out' ? '<path d="M12 19V5M6 11l6-6 6 6"/>' : '<path d="M5 9h14M15 5l4 4-4 4M19 15H5M9 11l-4 4 4 4"/>'}</svg></span>`;
-    if (t.type === 'xfer') return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow('x')}<div><div class="t1">تحويل</div><div class="t2">${accName(t.acc)} ← ${accName(t.to)} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</div></div></div><div style="font-weight:800">${fmt(t.amount)}</div></button>`;
-    return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow(t.type === 'in' ? 'in' : 'out')}<div><div class="t1">${esc(t.label || catOf(t.cat).name)}</div><div class="t2">${chip(t.cat)}${subChipHtml(t)}<span>${accName(t.acc)} · ${dayLabel(t.ts)} ${timeStr(t.ts)}</span></div></div></div><div class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '-'}${fmt(t.amount)}</div></button>`;
+    if (t.type === 'xfer') return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow('x')}<div><div class="t1">تحويل</div><div class="t2">${accName(t.acc)} ← ${accName(t.to)} · ${timeStr(t.ts)}</div></div></div><div style="font-weight:800">${fmt(t.amount)}</div></button>`;
+    return `<button class="tx" data-act="tx" data-id="${t.id}"><div class="row" style="gap:10px">${arrow(t.type === 'in' ? 'in' : 'out')}<div><div class="t1">${esc(t.label || catOf(t.cat).name)}</div><div class="t2">${chip(t.cat)}${subChipHtml(t)}<span>${accName(t.acc)} · ${timeStr(t.ts)}</span></div></div></div><div class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '-'}${fmt(t.amount)}</div></button>`;
   }
 
   /* أزرار اختيار بدل القوائم المنسدلة */
