@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.20.23';
+  const APP_VERSION = '1.21.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -436,7 +436,38 @@
   const ymd = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
   const toDigits = (v) => String(v == null ? '' : v).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.');
 
+  /* إدخال يدوي جديد على خطوتين: (1) المبلغ والتصنيف (2) الوصف والنوع والحساب والتاريخ */
+  function catComboHtml(sh) {
+    const t = sh.tx; const c = engine.catOf(t.cat) || { name: 'اختار التصنيف', color: '' }; const q = norm1(sh.ddq || '');
+    const btn = `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span>${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
+    if (!sh.dd) return btn;
+    const grp = (title, list) => { const l = list.filter((x) => !q || norm1(x.name).indexOf(q) >= 0); return l.length ? `<div class="cbgrp">${title}</div>${l.map((x) => `<button type="button" role="option" class="cbopt${x.id === t.cat ? ' on' : ''}" data-act="wz-cat" data-v="${x.id}"><i class="cbdot" style="background:${x.color || 'var(--mute)'}"></i><span>${esc(x.name)}</span></button>`).join('')}` : ''; };
+    const body = grp('مصروفات', engine.catsOut()) + grp('دخل', engine.catsIn());
+    return `${btn}<div class="cbpanel" role="listbox"><input id="ddq" data-dq="1" data-keepfocus="1" aria-label="ابحث عن تصنيف" placeholder="ابحث عن تصنيف" value="${esc(sh.ddq || '')}"><div class="cblist">${body || '<div class="small" style="padding:8px">مفيش تصنيف بالاسم ده.</div>'}</div></div>`;
+  }
+  function newTxHtml(sh) {
+    const t = sh.tx; const isX = t.type === 'xfer'; const step = sh.step === 2 ? 2 : 1;
+    const actions = (nextAct, nextTxt, backAct) => `<div class="row stick"><button class="btn primary grow" data-act="${nextAct}">${nextTxt}</button>${backAct ? `<button class="btn ghost" data-act="${backAct}">رجوع</button>` : ''}<button class="btn ghost" data-act="close">إلغاء</button></div>`;
+    if (step === 1) {
+      return `<div class="h" style="font-size:18px">إدخال يدوي <span class="small">· الخطوة 1 من 2</span></div>${entryModeSeg('manual', true)}
+        <div class="field col"><label for="te_amount">المبلغ</label><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="0" aria-label="المبلغ" value="${esc(t.amount)}"></div>
+        <div class="field col"><label>التصنيف</label>${catComboHtml(sh)}</div>${sh.dd ? '' : subRowHtml(sh)}
+        ${actions('wz-next', 'التالي', '')}`;
+    }
+    const c = engine.catOf(t.cat) || { name: '' };
+    const typeSeg = `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button><button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button></div>`;
+    const sum = `<div class="row between wzsum"><b style="font-size:22px">${esc(t.amount || '0')}</b>${isX ? '<span class="small">تحويل بين حساباتك</span>' : `<button type="button" class="chip" data-act="wz-prev" aria-label="تغيير التصنيف">${esc(c.name)} ✎</button>`}</div>`;
+    const accs = isX
+      ? `<div class="field col${t.acc ? '' : ' needacc'}"><label>من</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col${t.to ? '' : ' needacc'}"><label>إلى</label><div class="pick hs">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
+      : `<div class="field col${t.acc ? '' : ' needacc'}"><label>${t.type === 'in' ? 'استلمته في أنهي حساب؟' : 'دفعته من أنهي حساب؟'}${t.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
+    return `<div class="h" style="font-size:18px">إدخال يدوي <span class="small">· الخطوة 2 من 2</span></div>${sum}${typeSeg}
+      ${isX ? '' : `<div class="field col"><label for="te_label">الوصف (اختياري)</label><input id="te_label" data-te="label" placeholder="مثال: غدا" aria-label="الوصف" value="${esc(t.label)}"></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div>`}
+      ${accs}
+      <div class="row2"><input id="te_date" type="date" data-te="date" aria-label="التاريخ" value="${sh.date}"><input id="te_time" type="time" data-te="time" aria-label="الوقت" value="${sh.time}"></div>
+      ${actions('tx-save', 'حفظ', 'wz-prev')}`;
+  }
   function txEditHtml(sh) {
+    if (sh.isNew) return newTxHtml(sh);
     const t = sh.tx; const isX = t.type === 'xfer';
     const typeSeg = isX && !sh.isNew ? '' : `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button>${sh.isNew ? `<button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button>` : ''}</div>`;
     const fields = isX
@@ -1282,7 +1313,11 @@
       case 'nc-create': createCategory(); break;
       case 'day': ui.sheet = { type: 'day', d: +el.dataset.d }; render(); break;
       case 'close': ui.sheet = null; render(); break;
-      case 'sheet-back': { const sh = ui.sheet; if (sh && sh.type === 'sub') ui.sheet = { type: 'cat', id: sh.cat, filter: '', confirm: false, moveTo: 'other' }; else ui.sheet = null; render(); break; }
+      case 'wz-dd': { const sh = ui.sheet; sh.dd = !sh.dd; sh.ddq = ''; render(); break; }
+      case 'wz-cat': { const sh = ui.sheet; const t = sh.tx; t.cat = el.dataset.v; sh.catManual = true; sh.hint = ''; const ct = engine.catOf(t.cat); if (ct && (ct.type === 'in' || ct.type === 'out') && t.type !== 'xfer') t.type = ct.type; if (t.sub && !engine.subsOf(t.cat).some((x) => x.id === t.sub)) t.sub = ''; sh.dd = false; sh.ddq = ''; render(); break; }
+      case 'wz-next': { const sh = ui.sheet; const am = parseFloat(toDigits(sh.tx.amount)); if (!(am > 0)) { toast('اكتب المبلغ الأول'); break; } sh.dd = false; sh.step = 2; render(); break; }
+      case 'wz-prev': { ui.sheet.step = 1; render(); break; }
+      case 'sheet-back': { const sh = ui.sheet; if (sh && sh.type === 'sub') ui.sheet = { type: 'cat', id: sh.cat, filter: '', confirm: false, moveTo: 'other' }; else if (sh && sh.type === 'tx' && sh.isNew && sh.step === 2) sh.step = 1; else if (sh && sh.type === 'tx' && sh.isNew && sh.dd) sh.dd = false; else ui.sheet = null; render(); break; }
       case 'del-tx': S.txs = S.txs.filter((t) => t.id !== el.dataset.id); ui.sheet = null; save(); render(); break;
       case 'mprev': ui.stWeek = undefined; ui.vm.m--; if (ui.vm.m < 0) { ui.vm.m = 11; ui.vm.y--; } render(); break;
       case 'mnext': ui.stWeek = undefined; ui.vm.m++; if (ui.vm.m > 11) { ui.vm.m = 0; ui.vm.y++; } render(); break;
@@ -1328,6 +1363,7 @@
   }
   document.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.dq !== undefined) { if (ui.sheet) { ui.sheet.ddq = t.value; render(); } return; }
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.rc) { rcSet(t, false); return; }
     if (t.dataset.nd || t.dataset.sz) { if (ui.sheet) ui.sheet.date = t.value; return; }
@@ -1457,7 +1493,7 @@
   (function hwBack() {
     const App = cap('App'); if (!App || !App.addListener) return;
     App.addListener('backButton', () => {
-      if (ui.sheet && ui.sheet.type !== 'onboard') { if (ui.sheet.type === 'sub') ui.sheet = { type: 'cat', id: ui.sheet.cat, filter: '', confirm: false, moveTo: 'other' }; else ui.sheet = null; render(); return; }
+      if (ui.sheet && ui.sheet.type !== 'onboard') { if (ui.sheet.type === 'tx' && ui.sheet.isNew && ui.sheet.step === 2) { ui.sheet.step = 1; render(); return; } if (ui.sheet.type === 'sub') ui.sheet = { type: 'cat', id: ui.sheet.cat, filter: '', confirm: false, moveTo: 'other' }; else ui.sheet = null; render(); return; }
       if (ui.tab !== 'home') { ui.tab = 'home'; render(); return; }
       if (App.minimizeApp) App.minimizeApp();
     });
