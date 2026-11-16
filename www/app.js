@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.21.2';
+  const APP_VERSION = '1.21.3';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -441,10 +441,10 @@
     return `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px;min-width:0">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span class="cbname">${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
   }
   function catPanelHtml(sh) {
-    const t = sh.tx; const q = norm1(sh.ddq || '');
-    const grp = (title, list) => { const l = list.filter((x) => !q || norm1(x.name).indexOf(q) >= 0); return l.length ? `<div class="cbgrp">${title}</div>${l.map((x) => `<button type="button" role="option" class="cbopt${x.id === t.cat ? ' on' : ''}" data-act="wz-cat" data-v="${x.id}"><i class="cbdot" style="background:${x.color || 'var(--mute)'}"></i><span>${esc(x.name)}</span></button>`).join('')}` : ''; };
-    const body = grp('مصروفات', engine.catsOut()) + grp('دخل', engine.catsIn());
-    return `<div class="cbpanel" role="listbox"><input id="ddq" data-dq="1" data-keepfocus="1" aria-label="ابحث عن تصنيف" placeholder="ابحث عن تصنيف" value="${esc(sh.ddq || '')}"><div class="cblist">${body || '<div class="small" style="padding:8px">مفيش تصنيف بالاسم ده.</div>'}</div></div>`;
+    const t = sh.tx;
+    const opt = (x) => { const col = x.color || 'var(--mute)'; return `<button type="button" role="option" class="pgopt${x.id === t.cat ? ' on' : ''}" style="--pc:${col}" data-act="wz-cat" data-v="${x.id}">${esc(x.name)}</button>`; };
+    const grp = (title, list) => list.length ? `<div class="pggrp">${title}</div>${list.map(opt).join('')}` : '';
+    return `<div class="pgov" data-act="wz-dd"><div class="pgbox" role="listbox" aria-label="التصنيف" data-stop="1"><div class="pgtitle">🏷️ التصنيف</div><div class="pglist">${grp('مصروفات', engine.catsOut())}${grp('دخل', engine.catsIn())}</div><button type="button" class="pgcancel" data-act="wz-dd">إلغاء</button></div></div>`;
   }
   function newTxHtml(sh) {
     const t = sh.tx; const isX = t.type === 'xfer';
@@ -456,7 +456,7 @@
       : accSeg(t.acc, 'acc');
     const top = isX
       ? `<div class="field col"><label for="te_amount">المبلغ</label><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}"></div>`
-      : `<div class="amtcat"><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}">${catBtnHtml(sh, c)}</div>${sh.dd ? catPanelHtml(sh) : subRowHtml(sh)}`;
+      : `<div class="amtcat"><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}">${catBtnHtml(sh, c)}</div>${subRowHtml(sh)}${sh.dd ? catPanelHtml(sh) : ''}`;
     return `<div class="h" style="font-size:18px">إدخال يدوي</div>${entryModeSeg('manual', true)}
       ${top}
       ${isX ? '' : `<input id="te_label" data-te="label" placeholder="الوصف (اختياري)، مثال: غدا" aria-label="الوصف" value="${esc(t.label)}"><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div>`}
@@ -1198,7 +1198,7 @@
 
   /* ---------- أحداث ---------- */
   document.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-act]'); if (!el) return; const a = el.dataset.act;
+    const el = e.target.closest('[data-act]'); if (!el) return; const a = el.dataset.act; if (el.classList.contains('pgov') && e.target !== el) return;
     if (a === 'scrim') { if (e.target === el) { ui.sheet = null; render(); } return; }
     const idx = +el.dataset.i;
     switch (a) {
