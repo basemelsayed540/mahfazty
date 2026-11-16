@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.21.0';
+  const APP_VERSION = '1.21.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -223,7 +223,7 @@
   function draftHtml() {
     const d = ui.draft; if (!d) return '';
     if (d.kind === 'transfer') {
-      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} من ${accName(d.from)} إلى ${accName(d.to)}</div>${draftDateHtml(d)}
+      return `<div class="card draft"><div class="h">تحويل بين حساباتك</div><div style="font-size:15px;font-weight:700">${fmt(d.amount)} من ${accName(d.from)} إلى ${accName(d.to)}</div>
         <div class="row"><button class="btn primary grow" data-act="save-draft">تأكيد التحويل</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
     }
     const aiNote = d.ai === 'pending' ? '<div class="ok">بسأل Claude عشان أتأكد…</div>' : d.ai === 'done' ? '<div class="ok">Claude ساعدني في الفهم</div>' : d.ai === 'error' ? '<div class="warn">ما قدرتش أوصل لـClaude، اتصنّف محلياً.</div>' : '';
@@ -237,7 +237,7 @@
         <div class="seg" role="group" aria-label="النوع"><button class="${it.type === 'out' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="out">مصروف</button><button class="${it.type === 'in' ? 'on' : ''}" data-act="type" data-i="${i}" data-v="in">دخل</button></div>
         ${msg}</div>`;
     }).join('');
-    return `<div class="card draft"><div class="h">راجع قبل الحفظ</div>${aiNote}${items}${draftDateHtml(d)}
+    return `<div class="card draft"><div class="h">راجع قبل الحفظ</div>${aiNote}${items}
       <div class="row"><button class="btn primary grow" data-act="save-draft">حفظ ${d.items.length > 1 ? 'الكل' : ''}</button><button class="btn ghost grow" data-act="cancel-draft">إلغاء</button></div></div>`;
   }
 
@@ -437,34 +437,31 @@
   const toDigits = (v) => String(v == null ? '' : v).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.');
 
   /* إدخال يدوي جديد على خطوتين: (1) المبلغ والتصنيف (2) الوصف والنوع والحساب والتاريخ */
-  function catComboHtml(sh) {
-    const t = sh.tx; const c = engine.catOf(t.cat) || { name: 'اختار التصنيف', color: '' }; const q = norm1(sh.ddq || '');
-    const btn = `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span>${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
-    if (!sh.dd) return btn;
+  function catBtnHtml(sh, c) {
+    return `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px;min-width:0">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span class="cbname">${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
+  }
+  function catPanelHtml(sh) {
+    const t = sh.tx; const q = norm1(sh.ddq || '');
     const grp = (title, list) => { const l = list.filter((x) => !q || norm1(x.name).indexOf(q) >= 0); return l.length ? `<div class="cbgrp">${title}</div>${l.map((x) => `<button type="button" role="option" class="cbopt${x.id === t.cat ? ' on' : ''}" data-act="wz-cat" data-v="${x.id}"><i class="cbdot" style="background:${x.color || 'var(--mute)'}"></i><span>${esc(x.name)}</span></button>`).join('')}` : ''; };
     const body = grp('مصروفات', engine.catsOut()) + grp('دخل', engine.catsIn());
-    return `${btn}<div class="cbpanel" role="listbox"><input id="ddq" data-dq="1" data-keepfocus="1" aria-label="ابحث عن تصنيف" placeholder="ابحث عن تصنيف" value="${esc(sh.ddq || '')}"><div class="cblist">${body || '<div class="small" style="padding:8px">مفيش تصنيف بالاسم ده.</div>'}</div></div>`;
+    return `<div class="cbpanel" role="listbox"><input id="ddq" data-dq="1" data-keepfocus="1" aria-label="ابحث عن تصنيف" placeholder="ابحث عن تصنيف" value="${esc(sh.ddq || '')}"><div class="cblist">${body || '<div class="small" style="padding:8px">مفيش تصنيف بالاسم ده.</div>'}</div></div>`;
   }
   function newTxHtml(sh) {
-    const t = sh.tx; const isX = t.type === 'xfer'; const step = sh.step === 2 ? 2 : 1;
-    const actions = (nextAct, nextTxt, backAct) => `<div class="row stick"><button class="btn primary grow" data-act="${nextAct}">${nextTxt}</button>${backAct ? `<button class="btn ghost" data-act="${backAct}">رجوع</button>` : ''}<button class="btn ghost" data-act="close">إلغاء</button></div>`;
-    if (step === 1) {
-      return `<div class="h" style="font-size:18px">إدخال يدوي <span class="small">· الخطوة 1 من 2</span></div>${entryModeSeg('manual', true)}
-        <div class="field col"><label for="te_amount">المبلغ</label><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="0" aria-label="المبلغ" value="${esc(t.amount)}"></div>
-        <div class="field col"><label>التصنيف</label>${catComboHtml(sh)}</div>${sh.dd ? '' : subRowHtml(sh)}
-        ${actions('wz-next', 'التالي', '')}`;
-    }
-    const c = engine.catOf(t.cat) || { name: '' };
+    const t = sh.tx; const isX = t.type === 'xfer';
+    const c = engine.catOf(t.cat) || { name: 'التصنيف', color: '' };
     const typeSeg = `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button><button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button></div>`;
-    const sum = `<div class="row between wzsum"><b style="font-size:22px">${esc(t.amount || '0')}</b>${isX ? '<span class="small">تحويل بين حساباتك</span>' : `<button type="button" class="chip" data-act="wz-prev" aria-label="تغيير التصنيف">${esc(c.name)} ✎</button>`}</div>`;
+    const accSeg = (sel, k) => `<div class="seg chiprow${sel ? '' : ' needacc'}" role="group" aria-label="الحساب">${accList().map((a) => `<button type="button" class="${a.id === sel ? 'on' : ''}" data-act="te-pick" data-k="${k}" data-v="${a.id}">${esc(a.name)}</button>`).join('')}</div>`;
     const accs = isX
-      ? `<div class="field col${t.acc ? '' : ' needacc'}"><label>من</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div><div class="field col${t.to ? '' : ' needacc'}"><label>إلى</label><div class="pick hs">${accPick(t.to, 'data-act="te-pick" data-k="to"')}</div></div>`
-      : `<div class="field col${t.acc ? '' : ' needacc'}"><label>${t.type === 'in' ? 'استلمته في أنهي حساب؟' : 'دفعته من أنهي حساب؟'}${t.acc ? '' : ' <span style="color:var(--red)">(اختار الحساب)</span>'}</label><div class="pick hs">${accPick(t.acc, 'data-act="te-pick" data-k="acc"')}</div></div>`;
-    return `<div class="h" style="font-size:18px">إدخال يدوي <span class="small">· الخطوة 2 من 2</span></div>${sum}${typeSeg}
-      ${isX ? '' : `<div class="field col"><label for="te_label">الوصف (اختياري)</label><input id="te_label" data-te="label" placeholder="مثال: غدا" aria-label="الوصف" value="${esc(t.label)}"></div><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div>`}
-      ${accs}
-      <div class="row2"><input id="te_date" type="date" data-te="date" aria-label="التاريخ" value="${sh.date}"><input id="te_time" type="time" data-te="time" aria-label="الوقت" value="${sh.time}"></div>
-      ${actions('tx-save', 'حفظ', 'wz-prev')}`;
+      ? `<div class="small">من حساب</div>${accSeg(t.acc, 'acc')}<div class="small">إلى حساب</div>${accSeg(t.to, 'to')}`
+      : accSeg(t.acc, 'acc');
+    const top = isX
+      ? `<div class="field col"><label for="te_amount">المبلغ</label><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}"></div>`
+      : `<div class="amtcat"><input id="te_amount" class="bigamt" data-te="amount" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ" value="${esc(t.amount)}">${catBtnHtml(sh, c)}</div>${sh.dd ? catPanelHtml(sh) : subRowHtml(sh)}`;
+    return `<div class="h" style="font-size:18px">إدخال يدوي</div>${entryModeSeg('manual', true)}
+      ${top}
+      ${isX ? '' : `<input id="te_label" data-te="label" placeholder="الوصف (اختياري)، مثال: غدا" aria-label="الوصف" value="${esc(t.label)}"><div id="te_hint" class="${sh.hint && sh.hint.indexOf('مش') === 0 ? 'warn' : 'ok'}">${esc(sh.hint || '')}</div>`}
+      ${typeSeg}${accs}
+      <div class="row stick"><button class="btn primary grow" data-act="tx-save">حفظ</button><button class="btn ghost" data-act="close">إلغاء</button></div>`;
   }
   function txEditHtml(sh) {
     if (sh.isNew) return newTxHtml(sh);
@@ -740,8 +737,7 @@
       let subNote = '';
       const am = parseFloat(toDigits(t.amount)); if (!(am > 0)) { toast('اكتب مبلغ صحيح'); return; }
       if (!t.acc || (t.type === 'xfer' && !t.to)) { toast(t.type === 'xfer' ? 'اختار الحساب اللي محوّل منه واللي محوّل له' : 'اختار الحساب الأول: نقدي أو محفظة أو انستا...'); sh.needAcc = true; render(); return; }
-      const dq = (sh.date || '').split('-').map(Number); const tq = (sh.time || '00:00').split(':').map(Number);
-      const ts0 = new Date(dq[0], (dq[1] || 1) - 1, dq[2] || 1, tq[0] || 0, tq[1] || 0).getTime(); if (isNaN(ts0)) { toast('التاريخ غير صحيح'); return; }
+      const ts0 = Date.now();
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
       else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc, sub: t.sub || '' }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, !!sh.catManual); if (lab && t.sub && sh.subManual) { const ad = engine.learnSub(lab, t.cat, t.sub); if (ad.length) subNote = `اتعلمت إن "${ad.join(' ')}" = ${engine.subName(t.cat, t.sub)}`; } }
       S.settings.lastAcc = t.acc; save(); ui.sheet = null; const advNote = afterSave(S.txs[S.txs.length - 1], sh.payFor); toast([subNote || 'اتسجلت العملية', advNote].filter(Boolean).join(' · '), 3200, t.type === 'in' ? 'in' : t.type === 'xfer' ? 'info' : 'out'); return;
