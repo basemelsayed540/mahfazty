@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.21.3';
+  const APP_VERSION = '1.21.4';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -444,7 +444,7 @@
     const t = sh.tx;
     const opt = (x) => { const col = x.color || 'var(--mute)'; return `<button type="button" role="option" class="pgopt${x.id === t.cat ? ' on' : ''}" style="--pc:${col}" data-act="wz-cat" data-v="${x.id}">${esc(x.name)}</button>`; };
     const grp = (title, list) => list.length ? `<div class="pggrp">${title}</div>${list.map(opt).join('')}` : '';
-    return `<div class="pgov" data-act="wz-dd"><div class="pgbox" role="listbox" aria-label="التصنيف" data-stop="1"><div class="pgtitle">🏷️ التصنيف</div><div class="pglist">${grp('مصروفات', engine.catsOut())}${grp('دخل', engine.catsIn())}</div><button type="button" class="pgcancel" data-act="wz-dd">إلغاء</button></div></div>`;
+    return `<div class="pgov" data-act="wz-dd"><div class="pgbox" role="listbox" aria-label="التصنيف" data-stop="1"><div class="pgtitle">التصنيف</div><div class="pglist">${grp('مصروفات', engine.catsOut())}${grp('دخل', engine.catsIn())}</div><button type="button" class="btn ghost pgcancel" data-act="wz-dd">إلغاء</button></div></div>`;
   }
   function newTxHtml(sh) {
     const t = sh.tx; const isX = t.type === 'xfer';
