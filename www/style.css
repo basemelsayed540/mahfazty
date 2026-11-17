@@ -299,3 +299,4 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .pgopt{background:var(--card);border:1px solid var(--line);border-inline-start:6px solid var(--pc);text-align:start;padding:0 14px;min-height:46px;display:flex;align-items:center}
 .pgopt.on{background:var(--accent-soft);border-color:var(--accent);border-inline-start-color:var(--pc);color:var(--accent)}
 .pgcancel{width:100%;flex:none}
+.pgopt{gap:8px}

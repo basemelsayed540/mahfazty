@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.21.4';
+  const APP_VERSION = '1.21.5';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -437,12 +437,15 @@
   const toDigits = (v) => String(v == null ? '' : v).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.');
 
   /* إدخال يدوي جديد على خطوتين: (1) المبلغ والتصنيف (2) الوصف والنوع والحساب والتاريخ */
+  const CAT_EMOJI = { food: '🍽️', vehicle: '🚗', transport: '🚌', bills: '🧾', telecom: '📱', health: '💊', clothes: '👕', edu: '📚', fun: '🎮', home: '🏠', care: '🧴', gifts: '🎁', debt: '💳', other: '📦', salary: '💰', work: '💼', gift_in: '🎉', refund: '↩️', in_other: '➕' };
+  const CAT_GUESS = [[/طعام|اكل|أكل|مطعم|بقال|سوبر/, '🍽️'], [/بنزين|سيار|مركب|عربي/, '🚗'], [/مواصل|تاكسي|اوبر|مترو/, '🚌'], [/فاتور|كهرب|مياه|غاز|ايجار|إيجار/, '🧾'], [/نت|انترنت|اتصال|رصيد|موبايل/, '📱'], [/صح|دواء|دكتور|طب|صيدل/, '💊'], [/ملابس|هدوم/, '👕'], [/تعليم|دراس|كورس|مدرس|كتب/, '📚'], [/ترفيه|سينما|لعب|خروج/, '🎮'], [/منزل|بيت|اثاث|أثاث/, '🏠'], [/عناي|حلاق|تجميل/, '🧴'], [/هد|تبرع|صدق/, '🎁'], [/دين|ديون|قسط|اقساط|أقساط/, '💳'], [/راتب|مرتب/, '💰'], [/شغل|عمل/, '💼'], [/ادخار|توفير/, '🐷'], [/سفر|رحل/, '✈️'], [/حيوان|قط|كلب/, '🐾']];
+  const catEmoji = (c) => CAT_EMOJI[c.id] || ((CAT_GUESS.find((g) => g[0].test(c.name || '')) || [])[1]) || '🏷️';
   function catBtnHtml(sh, c) {
-    return `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px;min-width:0">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span class="cbname">${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
+    return `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px;min-width:0">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span class="cbname">${c.id ? catEmoji(c) + ' ' : ''}${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
   }
   function catPanelHtml(sh) {
     const t = sh.tx;
-    const opt = (x) => { const col = x.color || 'var(--mute)'; return `<button type="button" role="option" class="pgopt${x.id === t.cat ? ' on' : ''}" style="--pc:${col}" data-act="wz-cat" data-v="${x.id}">${esc(x.name)}</button>`; };
+    const opt = (x) => { const col = x.color || 'var(--mute)'; return `<button type="button" role="option" class="pgopt${x.id === t.cat ? ' on' : ''}" style="--pc:${col}" data-act="wz-cat" data-v="${x.id}"><span aria-hidden="true">${catEmoji(x)}</span> ${esc(x.name)}</button>`; };
     const grp = (title, list) => list.length ? `<div class="pggrp">${title}</div>${list.map(opt).join('')}` : '';
     return `<div class="pgov" data-act="wz-dd"><div class="pgbox" role="listbox" aria-label="التصنيف" data-stop="1"><div class="pgtitle">التصنيف</div><div class="pglist">${grp('مصروفات', engine.catsOut())}${grp('دخل', engine.catsIn())}</div><button type="button" class="btn ghost pgcancel" data-act="wz-dd">إلغاء</button></div></div>`;
   }
