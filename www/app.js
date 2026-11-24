@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.21.5';
+  const APP_VERSION = '1.22.0';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
@@ -177,10 +177,10 @@
   }
   function openManual() {
     const n = Date.now();
-    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, subManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: 'other', sub: '', acc: ui.entryAcc || '', to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
+    ui.sheet = { type: 'tx', isNew: true, id: null, catManual: false, subManual: false, hint: '', tx: { type: 'out', amount: '', label: '', cat: '', sub: '', acc: ui.entryAcc || '', to: '' }, date: ymd(n), time: hhmm(n), confirm: false };
   }
   function autoCat(sh) {
-    if (!sh || sh.tx.type === 'xfer') return;
+    if (!sh || sh.tx.type === 'xfer' || sh.isNew) return;
     const lab = (sh.tx.label || '').trim(); if (!lab) { sh.hint = ''; return; }
     let conf = 'high';
     if (!sh.catManual) { const sc = engine.scoreLabel(lab); const pk = engine.pick(sc.score, null, sh.tx.type); sh.tx.cat = pk.cat; conf = pk.conf; }
@@ -441,17 +441,26 @@
   const CAT_GUESS = [[/طعام|اكل|أكل|مطعم|بقال|سوبر/, '🍽️'], [/بنزين|سيار|مركب|عربي/, '🚗'], [/مواصل|تاكسي|اوبر|مترو/, '🚌'], [/فاتور|كهرب|مياه|غاز|ايجار|إيجار/, '🧾'], [/نت|انترنت|اتصال|رصيد|موبايل/, '📱'], [/صح|دواء|دكتور|طب|صيدل/, '💊'], [/ملابس|هدوم/, '👕'], [/تعليم|دراس|كورس|مدرس|كتب/, '📚'], [/ترفيه|سينما|لعب|خروج/, '🎮'], [/منزل|بيت|اثاث|أثاث/, '🏠'], [/عناي|حلاق|تجميل/, '🧴'], [/هد|تبرع|صدق/, '🎁'], [/دين|ديون|قسط|اقساط|أقساط/, '💳'], [/راتب|مرتب/, '💰'], [/شغل|عمل/, '💼'], [/ادخار|توفير/, '🐷'], [/سفر|رحل/, '✈️'], [/حيوان|قط|كلب/, '🐾']];
   const catEmoji = (c) => CAT_EMOJI[c.id] || ((CAT_GUESS.find((g) => g[0].test(c.name || '')) || [])[1]) || '🏷️';
   function catBtnHtml(sh, c) {
-    return `<button type="button" class="cbbtn" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px;min-width:0">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span class="cbname">${c.id ? catEmoji(c) + ' ' : ''}${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
+    return `<button type="button" class="cbbtn${!c.id && sh.needCat ? ' needacc' : ''}" data-act="wz-dd" aria-haspopup="listbox" aria-expanded="${sh.dd ? 'true' : 'false'}"><span class="row" style="gap:8px;min-width:0">${c.color ? `<i class="cbdot" style="background:${c.color}"></i>` : ''}<span class="cbname">${c.id ? catEmoji(c) + ' ' : '🏷️ '}${esc(c.name)}</span></span><span aria-hidden="true">${sh.dd ? '▴' : '▾'}</span></button>`;
   }
   function catPanelHtml(sh) {
     const t = sh.tx;
-    const opt = (x) => { const col = x.color || 'var(--mute)'; return `<button type="button" role="option" class="pgopt${x.id === t.cat ? ' on' : ''}" style="--pc:${col}" data-act="wz-cat" data-v="${x.id}"><span aria-hidden="true">${catEmoji(x)}</span> ${esc(x.name)}</button>`; };
+    if (sh.addCat) {
+      const a = sh.addCat;
+      return `<div class="pgov" data-act="wz-dd"><div class="pgbox" data-stop="1"><div class="pgtitle">تصنيف جديد</div>
+        <input id="nc2_name" data-nc2="1" data-keepfocus="1" aria-label="اسم التصنيف" placeholder="اسم التصنيف، مثال: إيجارات" value="${esc(a.name)}">
+        <div class="seg" role="group" aria-label="النوع"><button type="button" class="${a.type === 'out' ? 'on' : ''}" data-act="nc2-type" data-v="out">مصروف</button><button type="button" class="${a.type === 'in' ? 'on' : ''}" data-act="nc2-type" data-v="in">دخل</button></div>
+        ${swatchesHtml(a.color, 'nc2-color')}
+        <button type="button" class="btn primary pgcancel" data-act="nc2-create">إضافة واختيار</button><button type="button" class="btn ghost pgcancel" data-act="nc2-cancel">رجوع للقائمة</button></div></div>`;
+    }
+    const opt = (x) => { const col = x.color || 'var(--mute)'; return `<button type="button" role="option" class="pgopt${x.id === t.cat ? ' on' : ''}" style="--pc:${col}" data-act="wz-cat" data-v="${x.id}"><span aria-hidden="true">${catEmoji(x)}</span><span class="pgn">${esc(x.name)}</span></button>`; };
     const grp = (title, list) => list.length ? `<div class="pggrp">${title}</div>${list.map(opt).join('')}` : '';
-    return `<div class="pgov" data-act="wz-dd"><div class="pgbox" role="listbox" aria-label="التصنيف" data-stop="1"><div class="pgtitle">التصنيف</div><div class="pglist">${grp('مصروفات', engine.catsOut())}${grp('دخل', engine.catsIn())}</div><button type="button" class="btn ghost pgcancel" data-act="wz-dd">إلغاء</button></div></div>`;
+    const add = `<button type="button" class="pgopt pgadd" data-act="nc2-open"><span aria-hidden="true">＋</span><span class="pgn">تصنيف جديد</span></button>`;
+    return `<div class="pgov" data-act="wz-dd"><div class="pgbox" role="listbox" aria-label="التصنيف" data-stop="1"><div class="pgtitle">التصنيف</div><div class="pglist">${grp('مصروفات', engine.catsOut())}${grp('دخل', engine.catsIn())}</div>${add}<button type="button" class="btn ghost pgcancel" data-act="wz-dd">إلغاء</button></div></div>`;
   }
   function newTxHtml(sh) {
     const t = sh.tx; const isX = t.type === 'xfer';
-    const c = engine.catOf(t.cat) || { name: 'التصنيف', color: '' };
+    const c = t.cat ? engine.catOf(t.cat) : { name: 'اختر التصنيف', color: '', id: '' };
     const typeSeg = `<div class="seg" role="group" aria-label="النوع"><button class="${t.type === 'out' ? 'on' : ''}" data-act="tx-type" data-v="out">مصروف</button><button class="${t.type === 'in' ? 'on' : ''}" data-act="tx-type" data-v="in">دخل</button><button class="${t.type === 'xfer' ? 'on' : ''}" data-act="tx-type" data-v="xfer">تحويل</button></div>`;
     const accSeg = (sel, k) => `<div class="seg chiprow${sel ? '' : ' needacc'}" role="group" aria-label="الحساب">${accList().map((a) => `<button type="button" class="${a.id === sel ? 'on' : ''}" data-act="te-pick" data-k="${k}" data-v="${a.id}">${esc(a.name)}</button>`).join('')}</div>`;
     const accs = isX
@@ -740,6 +749,7 @@
       let subNote = '';
       const am = parseFloat(toDigits(t.amount)); if (!(am > 0)) { toast('اكتب مبلغ صحيح'); return; }
       if (!t.acc || (t.type === 'xfer' && !t.to)) { toast(t.type === 'xfer' ? 'اختار الحساب اللي محوّل منه واللي محوّل له' : 'اختار الحساب الأول: نقدي أو محفظة أو انستا...'); sh.needAcc = true; render(); return; }
+      if (t.type !== 'xfer' && !t.cat) { toast('اختار التصنيف الأول'); sh.needCat = true; render(); return; }
       const ts0 = Date.now();
       if (t.type === 'xfer') { if (t.acc === t.to) { toast('اختار حسابين مختلفين'); return; } S.txs.push({ id: uid(), ts: ts0, type: 'xfer', amount: am, acc: t.acc, to: t.to, label: 'تحويل', cat: 'other' }); }
       else { const lab = (t.label || '').trim(); S.txs.push({ id: uid(), ts: ts0, type: t.type, amount: am, label: lab, cat: t.cat, acc: t.acc, sub: t.sub || '' }); if (lab && t.cat !== 'other' && t.cat !== 'in_other') engine.learn(lab, t.cat, !!sh.catManual); if (lab && t.sub && sh.subManual) { const ad = engine.learnSub(lab, t.cat, t.sub); if (ad.length) subNote = `اتعلمت إن "${ad.join(' ')}" = ${engine.subName(t.cat, t.sub)}`; } }
@@ -1286,7 +1296,7 @@
       case 'type': { const it = ui.draft.items[idx]; it.type = el.dataset.v; const ok = (it.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === it.cat); if (!ok) it.cat = it.type === 'in' ? 'in_other' : 'other'; if (!engine.subsOf(it.cat).some((x) => x.id === it.sub)) it.sub = ''; render(); break; }
       case 'acc': ui.sheet = { type: 'acc', id: el.dataset.id }; render(); break;
       case 'tx': { const t0 = S.txs.find((x) => x.id === el.dataset.id); if (t0) { ui.sheet = { type: 'tx', id: t0.id, catManual: false, subManual: false, hint: '', tx: Object.assign({}, t0), date: ymd(t0.ts), time: hhmm(t0.ts), confirm: false }; render(); } break; }
-      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type !== 'xfer') autoCat(ui.sheet); if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = accIds().find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = t1.type === 'in' ? 'in_other' : 'other'; if (!engine.subsOf(t1.cat).some((x) => x.id === t1.sub)) t1.sub = ''; render(); break; }
+      case 'tx-type': { const t1 = ui.sheet.tx; t1.type = el.dataset.v; if (t1.type !== 'xfer') autoCat(ui.sheet); if (t1.type === 'xfer') { if (!t1.to || t1.to === t1.acc) t1.to = accIds().find((a) => a !== t1.acc); render(); break; } const okc = (t1.type === 'in' ? engine.catsIn() : engine.catsOut()).some((c) => c.id === t1.cat); if (!okc) t1.cat = ui.sheet.isNew ? '' : (t1.type === 'in' ? 'in_other' : 'other'); if (!engine.subsOf(t1.cat).some((x) => x.id === t1.sub)) t1.sub = ''; render(); break; }
       case 'add-tx': ui.entryAcc = ''; ui.draft = null; openManual(); render(); setTimeout(() => { const i = document.getElementById('te_amount'); if (i) i.focus(); }, 60); break;
       case 'entry-mode': if (el.dataset.v === 'manual') openManual(); else ui.sheet = { type: 'entry' }; render(); break;
       case 'theme-toggle': { if (curSkin() !== 'classic') { toast('المظهر بيتحدد من التصميم. غيّره من الإعدادات'); break; } const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (S.settings.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); render(); toast(dark ? 'الوضع العادي' : 'الوضع الداكن'); break; }
@@ -1312,6 +1322,11 @@
       case 'nc-create': createCategory(); break;
       case 'day': ui.sheet = { type: 'day', d: +el.dataset.d }; render(); break;
       case 'close': ui.sheet = null; render(); break;
+      case 'nc2-open': ui.sheet.addCat = { name: '', type: ui.sheet.tx.type === 'in' ? 'in' : 'out', color: SWATCHES[0] }; render(); setTimeout(() => { const i = document.getElementById('nc2_name'); if (i) i.focus(); }, 40); break;
+      case 'nc2-cancel': ui.sheet.addCat = null; render(); break;
+      case 'nc2-type': ui.sheet.addCat.type = el.dataset.v; render(); break;
+      case 'nc2-color': ui.sheet.addCat.color = el.dataset.c; render(); break;
+      case 'nc2-create': { const sh = ui.sheet; const a = sh.addCat; const name = (a.name || '').trim(); if (!name) { toast('اكتب اسم التصنيف'); break; } const id = 'c_' + uid(); applyCat((cfg) => { cfg.custom.push({ id, name, color: a.color, type: a.type, words: [] }); }); sh.addCat = null; sh.dd = false; sh.tx.cat = id; sh.catManual = true; if (sh.tx.type !== 'xfer') sh.tx.type = a.type; sh.tx.sub = ''; render(); toast('اتضاف التصنيف واتختار'); break; }
       case 'wz-dd': { const sh = ui.sheet; sh.dd = !sh.dd; sh.ddq = ''; render(); break; }
       case 'wz-cat': { const sh = ui.sheet; const t = sh.tx; t.cat = el.dataset.v; sh.catManual = true; sh.hint = ''; const ct = engine.catOf(t.cat); if (ct && (ct.type === 'in' || ct.type === 'out') && t.type !== 'xfer') t.type = ct.type; if (t.sub && !engine.subsOf(t.cat).some((x) => x.id === t.sub)) t.sub = ''; sh.dd = false; sh.ddq = ''; render(); break; }
       case 'wz-next': { const sh = ui.sheet; const am = parseFloat(toDigits(sh.tx.amount)); if (!(am > 0)) { toast('اكتب المبلغ الأول'); break; } sh.dd = false; sh.step = 2; render(); break; }
@@ -1362,6 +1377,7 @@
   }
   document.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.nc2 !== undefined) { ui.sheet.addCat.name = t.value; return; }
     if (t.dataset.dq !== undefined) { if (ui.sheet) { ui.sheet.ddq = t.value; render(); } return; }
     if (t.dataset.te) { teSet(t); return; }
     if (t.dataset.rc) { rcSet(t, false); return; }

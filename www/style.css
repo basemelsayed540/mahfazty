@@ -300,3 +300,13 @@ details summary{cursor:pointer;font-size:14px;font-weight:700;min-height:32px;di
 .pgopt.on{background:var(--accent-soft);border-color:var(--accent);border-inline-start-color:var(--pc);color:var(--accent)}
 .pgcancel{width:100%;flex:none}
 .pgopt{gap:8px}
+.pglist{grid-template-columns:repeat(3,1fr)!important;gap:7px!important}
+.pggrp{grid-column:1/-1}
+.pgopt{flex-direction:column;justify-content:center;gap:2px!important;text-align:center!important;min-height:62px!important;padding:6px 3px!important;font-size:12.5px;line-height:1.25;border-inline-start:1px solid var(--line)!important;border-top:4px solid var(--pc)!important;border-radius:12px}
+.pgopt.on{border-color:var(--accent)!important;border-top-color:var(--pc)!important}
+.pgopt>span:first-child{font-size:21px;line-height:1}
+.pgadd{border-top-color:var(--accent)!important;border-style:dashed;color:var(--accent);grid-column:1/-1;min-height:46px!important;flex-direction:row;gap:8px!important}
+.pgadd>span:first-child{font-size:20px}
+.pgbox .swatches{justify-content:center}
+.cbbtn.needacc{animation:needglow 1s ease 2}
+.pgbox>.pgadd{flex:none;grid-column:auto}
