@@ -47,7 +47,7 @@
   const nameTaken = (name, except) => S.accounts.some((a) => a.id !== except && a.name.trim().toLowerCase() === String(name).trim().toLowerCase());
   function applyAcct(fn) { fn(); engine.setAccounts(S.accounts); save(); }
 
-  const APP_VERSION = '1.22.0';
+  const APP_VERSION = '1.22.1';
   const ui = { changelog: null, update: '', tab: 'home', vm: { y: new Date().getFullYear(), m: new Date().getMonth() }, vy: new Date().getFullYear(), draft: null, sheet: null, chat: [], text: '', q: '', toast: '', banner: false, busy: false };
 
   /* ---------- أدوات ---------- */
